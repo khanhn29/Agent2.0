@@ -1,12 +1,16 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Renci.SshNet.Common;
+using Renci.SshNet.Sftp;
 
 namespace Agent2._0
 {
@@ -22,6 +26,7 @@ namespace Agent2._0
             // Init server
             db = new ServerDatabase(dbSvInfo);
             svSftp = new ServerSftp(sftpSvInfo);
+            
             if (db.conn.State == System.Data.ConnectionState.Open)
             {
                 Console.WriteLine("Connected to Database");
@@ -54,7 +59,7 @@ namespace Agent2._0
                     // Check if file exists with its full path
                     if (File.Exists(localFilePath))
                     {
-                        // If file found, read, save data to db ,move remote file to storehouse then delete it
+                        // If file found, read, save data to db, move remote file to storehouse then delete it
                         if (ReadLog_UpdateDb(localFilePath) == true)
                         {
                             //Create folder
@@ -89,12 +94,49 @@ namespace Agent2._0
         }
         static void LoadLogToDB()
         {
+            var folders = new List<string>()
+            {
+                "1.1 Do kiem TRX",
+                "1.2 Do kiem PA",
+                "1.3 Do kiem Filter",
+                "1.4 Do kiem Antenna",
+                "2. Lap rap RRU",
+                "3.1 Luu Serial vao EEPROM RRU",
+                "3.2 Do kiem Tx, Rx",
+                "4. Test kin khi",
+                "5. Burn in",
+                "6. Do kiem TX RX sau burn in",
+                "7. Test kin khi sau burn in",
+                "8.1 OQC Chu trinh nhiet",
+                "8.2 OQC Rung xoc",
+                "9. Do kiem TX RX sau rung xoc, chu trinh nhiet",
+                "10. Package"
+            };
+
             svSftp.Connect();
             if (svSftp.sftp.IsConnected)
             {
                 string remoteDirectory = svSftp.RemoteDirectory;
                 string localDirectory = svSftp.LocalDirectory;
-                LoadOneStation(remoteDirectory, localDirectory);
+
+                foreach (var folder in folders)
+                {
+                    if(svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
+                    {
+                        Console.WriteLine("Warning: folder \"{0}\" not exist.", folder);
+                        try
+                        {
+                            svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
+                            Console.WriteLine("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                        }
+                        catch (SftpPathNotFoundException) { }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Reading log from folder: " + folder);
+                        LoadOneStation(remoteDirectory + "\\" + folder + "\\", localDirectory);
+                    }
+                }
                 svSftp.Disconnect();
             }
             else

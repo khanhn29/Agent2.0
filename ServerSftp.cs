@@ -1,4 +1,6 @@
 ﻿using Renci.SshNet;
+using Renci.SshNet.Common;
+using Renci.SshNet.Sftp;
 using System;
 
 namespace Agent2._0
@@ -19,7 +21,7 @@ namespace Agent2._0
         }
         private string GetRemoteDirectory()
         {
-            return @"\sftp\";
+            return @"\sftp\report";
         }
         public void Connect()
         {
@@ -36,6 +38,44 @@ namespace Agent2._0
         public void Disconnect()
         {
             sftp.Disconnect();
+        }
+        public void CreateDirectoryRecursively(string path)
+        {
+            string current = "";
+
+            if (path[0] == '/')
+            {
+                path = path.Substring(1);
+            }
+
+            while (!string.IsNullOrEmpty(path))
+            {
+                int p = path.IndexOf('/');
+                current += '/';
+                if (p >= 0)
+                {
+                    current += path.Substring(0, p);
+                    path = path.Substring(p + 1);
+                }
+                else
+                {
+                    current += path;
+                    path = "";
+                }
+
+                try
+                {
+                    SftpFileAttributes attrs = this.sftp.GetAttributes(current);
+                    if (!attrs.IsDirectory)
+                    {
+                        throw new Exception("not directory");
+                    }
+                }
+                catch (SftpPathNotFoundException)
+                {
+                    this.sftp.CreateDirectory(current);
+                }
+            }
         }
     }
 }
