@@ -1,16 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.RegularExpressions;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Renci.SshNet.Common;
-using Renci.SshNet.Sftp;
 
 namespace Agent2._0
 {
@@ -20,6 +18,7 @@ namespace Agent2._0
         static InfoServerSftp sftpSvInfo = new InfoServerSftp();
         static ServerDatabase db;
         static ServerSftp svSftp;
+        static DateTime now = DateTime.Now;
         static void Main(string[] args)
         {
             Console.Title = "Agent 2.0";
@@ -30,7 +29,7 @@ namespace Agent2._0
             if (db.conn.State == System.Data.ConnectionState.Open)
             {
                 Console.WriteLine("Connected to Database");
-                LoadLogToDB();
+                LoadCampaigns();
             }
             else
             {
@@ -78,7 +77,6 @@ namespace Agent2._0
                             else{
                                 file.MoveTo(remoteDirectory + "storehouse/" + DateTime.Now.ToString("MMddyyyy_HHmmss") + "_" + file.Name);
                             }
-
                         }
                         else
                         {
@@ -92,7 +90,32 @@ namespace Agent2._0
                 System.Threading.Thread.Sleep(100);
             }
         }
-        static void LoadLogToDB()
+
+        static void LoadCampaigns()
+        {
+            List<tblCampaign> ActiveCampaignList = new List<tblCampaign>();
+            MySqlDataReader rdr = db.Reader("SELECT id, created_date, last_updates, log_path FROM tbl_campaign");
+            while (rdr.Read())
+            {
+                //Console.WriteLine(rdr.GetString(0) + "--" + rdr.GetString(1) + "--" + rdr.GetString(2) + "--" + rdr.GetString(3));
+                DateTime createTime = DateTime.ParseExact(rdr.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                DateTime lastUpdate = DateTime.ParseExact(rdr.GetString(2), "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                if (DateTime.Compare(createTime, now) <= 0 && DateTime.Compare(now, lastUpdate) <= 0)
+                {
+                    Console.WriteLine(rdr.GetString(0) + "--" + rdr.GetString(1) + "--" + rdr.GetString(2) + "--" + rdr.GetString(3));
+                    ActiveCampaignList.Add(new tblCampaign(rdr.GetInt32(0), createTime, lastUpdate, rdr.GetString(3)));
+                }
+            }
+            rdr.Close();
+            
+            foreach(var campaign in ActiveCampaignList)
+            {
+                LoadCampaign(campaign);
+            }
+            
+        }
+
+        static void LoadCampaign(tblCampaign campaign)
         {
             var folders = new List<string>()
             {
@@ -116,25 +139,32 @@ namespace Agent2._0
             svSftp.Connect();
             if (svSftp.sftp.IsConnected)
             {
-                string remoteDirectory = svSftp.RemoteDirectory;
+                string remoteDirectory = campaign.LogPath;
                 string localDirectory = svSftp.LocalDirectory;
 
-                foreach (var folder in folders)
+                if(svSftp.sftp.Exists(remoteDirectory) == false)
                 {
-                    if(svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
+                    Console.WriteLine("Warning: Folder \"{0}\" of campaign not exist.", remoteDirectory);
+                }
+                else
+                {
+                    foreach (var folder in folders)
                     {
-                        Console.WriteLine("Warning: folder \"{0}\" not exist.", folder);
-                        try
+                        if (svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
                         {
-                            svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
-                            Console.WriteLine("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                            Console.WriteLine("Warning: folder \"{0}\" not exist.", folder);
+                            try
+                            {
+                                svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
+                                Console.WriteLine("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                            }
+                            catch (SftpPathNotFoundException) { }
                         }
-                        catch (SftpPathNotFoundException) { }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Reading log from folder: " + folder);
-                        LoadOneStation(remoteDirectory + "\\" + folder + "\\", localDirectory);
+                        else
+                        {
+                            Console.WriteLine("Reading log from folder: " + folder);
+                            LoadOneStation(remoteDirectory + "\\" + folder + "\\", localDirectory);
+                        }
                     }
                 }
                 svSftp.Disconnect();

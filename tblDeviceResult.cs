@@ -59,13 +59,13 @@ namespace Agent2._0
             DateTime dt;
             try
             {
-                dt = DateTime.ParseExact(rawDate, "d/MM/yyyy", CultureInfo.InvariantCulture);
-                return dt.ToString("yyyy-MM-dd");
+                dt = DateTime.ParseExact(rawDate, "d/M/yyyy:H:m", CultureInfo.InvariantCulture);
+                return dt.ToString("yyyy-MM-dd H:m:s");
             }
             catch(FormatException e)
             {
                 Console.WriteLine("Read date error: " + e.Message);
-                return "";
+                return DateTime.Now.ToString("yyyy-MM-dd H:m:s");
             }
         }
     }
