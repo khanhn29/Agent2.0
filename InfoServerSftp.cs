@@ -14,27 +14,28 @@ namespace Agent2._0
             string strExeFilePath = System.Reflection.Assembly.GetEntryAssembly().Location;
             string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
             XmlTextReader xtr = new XmlTextReader(strWorkPath + "/AgentCfg.xml");
+            Console.WriteLine("[Info] Getting sftp info:");
             while (xtr.Read())
             {
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "SftpIPAddress")
                 {
 
                     this.Ip = xtr.ReadElementContentAsString();
-                    Console.WriteLine("SftpIPAddress : " + Ip);
+                    Console.WriteLine("         IPAddress: " + Ip);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "SftpUsername")
                 {
 
                     this.Username = xtr.ReadElementContentAsString();
-                    Console.WriteLine("SftpUsername : " + Username);
+                    Console.WriteLine("         Username: " + Username);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "SftpPassword")
                 {
 
                     this.Pass = xtr.ReadElementContentAsString();
-                    Console.WriteLine("SftpPassword : " + Pass);
+                    Console.WriteLine("         Password: " + Pass);
                 }
 
             }

@@ -1,5 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
+using System.Data.SqlTypes;
 
 namespace Agent2._0
 {
@@ -22,7 +23,7 @@ namespace Agent2._0
             }
             catch(Exception e)
             {
-                Console.WriteLine("Create server database error: " + e.Message);
+                Console.WriteLine("[Error] Create server database error: " + e.Message);
             }
             
         }
@@ -34,7 +35,6 @@ namespace Agent2._0
         {
             try
             {
-                //Console.WriteLine("queryString: " + queryString);
                 using var command = new MySqlCommand(queryString, this.conn);
 
                 MySqlDataReader rdr = command.ExecuteReader();
@@ -43,11 +43,66 @@ namespace Agent2._0
             }
             catch (Exception e)
             {
-                Console.WriteLine("Error: " + e.Message);
+                Console.WriteLine("[Error] Exception" + e.Message);
                 return null;
             }
         }
         public bool InsertDevice(tblDevice dv)
+        {
+            if (dv.sn.StartsWith("RRU"))
+                return InsertDeviceRRU(dv);
+            else
+                return InsertDeviceComponent(dv);
+        }
+        private bool InsertDeviceRRU(tblDevice dv)
+        {
+            MySqlDataReader rdr = this.Reader("SELECT COUNT(id) FROM tbl_device WHERE sn='" + dv.sn + "'");
+            Int32 nDevice = 0;
+            rdr.Read();
+            try
+            {
+                nDevice = rdr.GetInt16(0) + 1;
+            }
+            catch (SqlNullValueException)
+            {
+                nDevice = 0;
+            }
+            rdr.Close();
+            if(nDevice == 0)
+            {
+                try
+                {
+                    string insertQuery = "INSERT INTO tbl_device(id, mac, sn, rru_sn) VALUE(?id, ?mac, ?sn, ?rru_sn)";
+                    MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
+                    cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
+                    cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
+                    cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
+                    cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Console.WriteLine("[Info] Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
+                        return true;
+                    }
+                    else
+                    {
+                        Console.WriteLine("[Error] Insert Device Data not failed");
+                        return false;
+                    }
+                }
+                catch (MySqlException ex)
+                {
+                    Console.WriteLine("[Error] Insert Device: " + ex.Message);
+                    return false;
+                }
+            }
+            else
+            {
+                //RRU sn already in tbl_device
+                return true;
+            }
+
+        }
+        private bool InsertDeviceComponent(tblDevice dv)
         {
             try
             {
@@ -56,21 +111,21 @@ namespace Agent2._0
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
                 cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
-                cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.rru_sn;
-                if(cmd.ExecuteNonQuery() == 1)
+                cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = "";
+                if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Console.WriteLine("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn + "," + dv.rru_sn);
+                    Console.WriteLine("[Info] Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine("Insert Device Data not failed");
+                    Console.WriteLine("[Error] Insert Device Data not failed");
                     return false;
                 }
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("Error in Insert Device: " + ex.Message);
+                Console.WriteLine("[Error] Insert Device: " + ex.Message);
                 return false;
             }
         }
@@ -94,18 +149,18 @@ namespace Agent2._0
                 cmd.Parameters.Add("?result", MySqlDbType.VarChar).Value = dvR.result;
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Console.WriteLine("Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
+                    Console.WriteLine("[Info] Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine("Data not inserted");
+                    Console.WriteLine("[Error] Data not inserted");
                     return false;
                 }
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("Error in Insert Device Result mysql row: " + ex.Message);
+                Console.WriteLine("[Error] Insert Device Result mysql row: " + ex.Message);
                 return false;
             }
         }
@@ -127,18 +182,16 @@ namespace Agent2._0
                 cmd.Parameters.Add("?result", MySqlDbType.VarChar).Value = dtR.result;
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    //Console.WriteLine("Insert DetailResult: " + dtR.id + "," + dtR.device_result_id + "," + dtR.sequence + "," + dtR.item_name + "," + dtR.min_value + "," + dtR.reading_value + "," + dtR.max_value + "," + dtR.test_time + "," + dtR.result);
                     return true;
                 }
                 else
                 {
-                    //Console.WriteLine("Data not inserted");
                     return false;
                 }
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("Error in Insert Detail Result mysql row: " + ex.Message);
+                Console.WriteLine("[Error] Insert Detail Result mysql: " + ex.Message);
                 return false;
             }
         }

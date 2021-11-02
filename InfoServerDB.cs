@@ -15,36 +15,37 @@ namespace Agent2._0
             string strExeFilePath = System.Reflection.Assembly.GetEntryAssembly().Location;
             string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
             XmlTextReader xtr = new XmlTextReader(strWorkPath + "/AgentCfg.xml");
+            Console.WriteLine("[Info] Getting MySQL Database info:");
             while (xtr.Read())
             {
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBIpAddress")
                 {
                     Ip = xtr.ReadElementContentAsString();
-                    Console.WriteLine("DBIpAddress : " + Ip);
+                    Console.WriteLine("         IpAddress: " + Ip);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBName")
                 {
                     Name = xtr.ReadElementContentAsString();
-                    Console.WriteLine("DBName : " + Name);
+                    Console.WriteLine("         Name: " + Name);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBUsername")
                 {
                     Username = xtr.ReadElementContentAsString();
-                    Console.WriteLine("DBUsername : " + Username);
+                    Console.WriteLine("         Username: " + Username);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBPassword")
                 {
                     Pass = xtr.ReadElementContentAsString();
-                    Console.WriteLine("DBPassword : " + Pass);
+                    Console.WriteLine("         Password: " + Pass);
                 }
 
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBPort")
                 {
                     Port = xtr.ReadElementContentAsString();
-                    Console.WriteLine("DBPort : " + Port);
+                    Console.WriteLine("         Port: " + Port);
                 }
             }
             xtr.Close();

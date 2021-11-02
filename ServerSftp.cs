@@ -32,7 +32,7 @@ namespace Agent2._0
             }
             catch(Exception e)
             {
-                Console.WriteLine("Connect sftp error: " + e.Message);
+                Console.WriteLine("[Error] Connect sftp error: " + e.Message);
             }
         }
         public void Disconnect()
