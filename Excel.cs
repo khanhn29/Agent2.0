@@ -46,7 +46,7 @@ namespace Agent2._0
             wb = xlApp.Workbooks.Open(path);
             ws = wb.Worksheets[sheet];
         }
-        private string GetDateFromFileName(string rawDate)
+        public static string GetDateFromFileName(string rawDate)
         {
             DateTime dt;
             try

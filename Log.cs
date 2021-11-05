@@ -15,14 +15,14 @@ namespace Agent2._0
         [CallerMemberName] string member = "",
         [CallerLineNumber] int line = 0)
         {
-            Console.WriteLine("[Info]    {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
+            Console.WriteLine("[Info]  {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
         }
         public static void Error(string text,
                         [CallerFilePath] string file = "",
                         [CallerMemberName] string member = "",
                         [CallerLineNumber] int line = 0)
         {
-            Console.WriteLine("[Error]   {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
+            Console.WriteLine("[Error] {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
         }
         public static void Warning(string text,
                         [CallerFilePath] string file = "",

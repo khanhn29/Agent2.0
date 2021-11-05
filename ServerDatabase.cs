@@ -209,8 +209,9 @@ namespace Agent2._0
                 using var command = new MySqlCommand(queryString, this.conn);
 
                 MySqlDataReader rdr = command.ExecuteReader();
-
+                rdr.Read();
                 ret = rdr.GetInt32(0);
+                rdr.Close();
             }
             catch (Exception e)
             {

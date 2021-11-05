@@ -24,20 +24,38 @@ namespace Agent2._0
         //}
         public tblDevice(ServerDatabase db, Excel excel)
         {
+            int id = 1;
+            string mac = "";
+            string mac2 = "";
+            string sn = "";
             MySqlDataReader rdr = db.Reader("SELECT MAX(id) FROM tbl_device");
-            //Read number of device
+
             rdr.Read();
             try{
-                this.id = rdr.GetInt16(0) + 1;
+                id = rdr.GetInt16(0) + 1;
             }
             catch (SqlNullValueException){
-                this.id = 1;
+                id = 1;
             }
             rdr.Close();
 
-            this.sn = excel.ReadCell(6, 2);
-            this.mac = "";
-            this.mac2 = "";
+            sn = excel.ReadCell(6, 2);
+
+            rdr = db.Reader("SELECT mac, mac2 FROM tbl_import_mac_sn WHERE sn = '" + sn + "'");
+            rdr.Read();
+            try{
+                mac = rdr.GetString(0);
+                mac2 = rdr.GetString(1);
+            }
+            catch (MySqlException e){
+                Log.Error("" + e.Message);
+            }
+            rdr.Close();
+
+            this.id = id;
+            this.sn = sn;
+            this.mac = mac;
+            this.mac2 = mac2;
         }
     }
 }

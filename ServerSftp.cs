@@ -9,15 +9,10 @@ namespace Agent2._0
     {
         public SftpClient sftp { get; set; }
         public string RemoteDirectory { get; set; }
-        public string LocalDirectory { get; set; }
         public ServerSftp(InfoServerSftp sftpSvInfo)
         {
-            string strExeFilePath = System.Reflection.Assembly.GetEntryAssembly().Location;
-            string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
-
             sftp = new SftpClient(new PasswordConnectionInfo(sftpSvInfo.Ip, sftpSvInfo.Username, sftpSvInfo.Pass));
             RemoteDirectory = GetRemoteDirectory();
-            LocalDirectory = strWorkPath + "\\";
         }
         private string GetRemoteDirectory()
         {
@@ -39,6 +34,12 @@ namespace Agent2._0
         {
             sftp.Disconnect();
         }
+
+        public bool Exists(string itemsPath)
+        {
+            return sftp.Exists(itemsPath);
+        }
+
         public void CreateDirectoryRecursively(string path)
         {
             string current = "";

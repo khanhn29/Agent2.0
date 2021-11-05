@@ -9,17 +9,17 @@ namespace Agent2._0
     class tblCampaign
     {
 
-        public tblCampaign(int id, DateTime createdate, DateTime lastupdate, string logpath)
+        public tblCampaign(int id, DateTime fromdate, DateTime todate, string logpath)
         {
             this.Id = id;
-            this.CreateDate = createdate;
-            this.LastUpdate = lastupdate;
+            this.FromDate = fromdate;
+            this.ToDate = todate;
             this.LogPath = logpath;
         }
 
         public int Id { get; set; }
-        public DateTime CreateDate { get; set; }
-        public DateTime LastUpdate { get; set; }
+        public DateTime FromDate { get; set; }
+        public DateTime ToDate { get; set; }
         public string LogPath { get; set; }
     }
 }
