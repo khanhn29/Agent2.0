@@ -7,13 +7,15 @@ namespace Agent2._0
     {
         public int id { get; set; }
         public string mac { get; set; }
+        public string mac2 { get; set; }
         public string sn { get; set; }
-        //public tblDevice(int id, string mac, string sn)
-        //{
-        //    this.id = id;
-        //    this.mac = mac;
-        //    this.sn = sn;
-        //}
+        public tblDevice(int id, string mac, string mac2, string sn)
+        {
+            this.id = id;
+            this.mac = mac;
+            this.mac2 = mac2;
+            this.sn = sn;
+        }
         //public tblDevice()
         //{
         //    this.id = 0;
@@ -35,6 +37,7 @@ namespace Agent2._0
 
             this.sn = excel.ReadCell(6, 2);
             this.mac = "";
+            this.mac2 = "";
         }
     }
 }

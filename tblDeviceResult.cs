@@ -64,7 +64,7 @@ namespace Agent2._0
             }
             catch(FormatException e)
             {
-                Console.WriteLine("[Error] Read date error: " + e.Message);
+                Log.Error(" Read date error: " + e.Message);
                 return DateTime.Now.ToString("yyyy-MM-dd H:m:s");
             }
         }

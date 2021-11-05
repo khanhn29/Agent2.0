@@ -23,7 +23,7 @@ namespace Agent2._0
             }
             catch(Exception e)
             {
-                Console.WriteLine("[Error] Create server database error: " + e.Message);
+                Log.Error("Create server database error: " + e.Message);
             }
             
         }
@@ -43,12 +43,33 @@ namespace Agent2._0
             }
             catch (Exception e)
             {
-                Console.WriteLine("[Error] Exception" + e.Message);
+                Log.Error("Exception" + e.Message);
                 return null;
             }
         }
         public bool InsertDevice(tblDevice dv)
         {
+            MySqlDataReader rdr = this.Reader("SELECT COUNT(id) FROM tbl_device WHERE sn='" + dv.sn + "'");
+            Int32 nDevice = 0;
+            rdr.Read();
+            try
+            {
+                nDevice = rdr.GetInt16(0);
+            }
+            catch (SqlNullValueException)
+            {
+                nDevice = 0;
+            }
+            rdr.Close();
+            if (nDevice > 0)
+            {
+                //RRU sn already in tbl_device
+                string insertQuery = "DELETE FROM tbl_device WHERE sn=?sn";
+                MySqlCommand cmd = new MySqlCommand(insertQuery, conn);
+                cmd.Parameters.Add("?sn", MySqlDbType.String).Value = dv.sn;
+                cmd.ExecuteNonQuery();
+            }
+
             if (dv.sn.StartsWith("RRU"))
                 return InsertDeviceRRU(dv);
             else
@@ -56,76 +77,59 @@ namespace Agent2._0
         }
         private bool InsertDeviceRRU(tblDevice dv)
         {
-            MySqlDataReader rdr = this.Reader("SELECT COUNT(id) FROM tbl_device WHERE sn='" + dv.sn + "'");
-            Int32 nDevice = 0;
-            rdr.Read();
+            bool ret = false;
             try
             {
-                nDevice = rdr.GetInt16(0) + 1;
-            }
-            catch (SqlNullValueException)
-            {
-                nDevice = 0;
-            }
-            rdr.Close();
-            if(nDevice == 0)
-            {
-                try
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
+                MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
+                cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
+                cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
+                cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = dv.mac2;
+                cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
+                cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
+                if (cmd.ExecuteNonQuery() == 1)
                 {
-                    string insertQuery = "INSERT INTO tbl_device(id, mac, sn, rru_sn) VALUE(?id, ?mac, ?sn, ?rru_sn)";
-                    MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
-                    cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
-                    cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
-                    cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
-                    cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
-                    if (cmd.ExecuteNonQuery() == 1)
-                    {
-                        Console.WriteLine("[Info] Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
-                        return true;
-                    }
-                    else
-                    {
-                        Console.WriteLine("[Error] Insert Device Data not failed");
-                        return false;
-                    }
+                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
+                    ret = true;
                 }
-                catch (MySqlException ex)
+                else
                 {
-                    Console.WriteLine("[Error] Insert Device: " + ex.Message);
-                    return false;
+                    Log.Error("Insert Device Data failed: " + dv.id + "," + dv.mac + "," + dv.sn);
+                    ret = false;
                 }
             }
-            else
+            catch (MySqlException ex)
             {
-                //RRU sn already in tbl_device
-                return true;
+                Log.Error("Insert Device: " + ex.Message);
+                ret = false;
             }
-
+            return ret;
         }
         private bool InsertDeviceComponent(tblDevice dv)
         {
             try
             {
-                string insertQuery = "INSERT INTO tbl_device(id, mac, sn, rru_sn) VALUE(?id, ?mac, ?sn, ?rru_sn)";
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
                 MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
-                cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
+                cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = "";
+                cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = "";
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = "";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Console.WriteLine("[Info] Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
+                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine("[Error] Insert Device Data not failed");
+                    Log.Error("Insert Device Data failed: " + dv.id + "," + dv.mac + "," + dv.sn);
                     return false;
                 }
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("[Error] Insert Device: " + ex.Message);
+                Log.Error("Insert Device: " + ex.Message);
                 return false;
             }
         }
@@ -149,18 +153,18 @@ namespace Agent2._0
                 cmd.Parameters.Add("?result", MySqlDbType.VarChar).Value = dvR.result;
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Console.WriteLine("[Info] Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
+                    Log.Info("Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
                     return true;
                 }
                 else
                 {
-                    Console.WriteLine("[Error] Data not inserted");
+                    Log.Error("Data not inserted: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
                     return false;
                 }
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("[Error] Insert Device Result mysql row: " + ex.Message);
+                Log.Error("Insert Device Result mysql row: " + ex.Message);
                 return false;
             }
         }
@@ -191,9 +195,29 @@ namespace Agent2._0
             }
             catch (MySqlException ex)
             {
-                Console.WriteLine("[Error] Insert Detail Result mysql: " + ex.Message);
+                Log.Error("Insert Detail Result mysql: " + ex.Message);
                 return false;
             }
+        }
+
+        public Int32 Count(string queryString)
+        {
+            Int32 ret = 0;
+
+            try
+            {
+                using var command = new MySqlCommand(queryString, this.conn);
+
+                MySqlDataReader rdr = command.ExecuteReader();
+
+                ret = rdr.GetInt32(0);
+            }
+            catch (Exception e)
+            {
+                Log.Error("Exception" + e.Message);
+            }
+
+            return ret;
         }
 
     }

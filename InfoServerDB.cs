@@ -15,7 +15,7 @@ namespace Agent2._0
             string strExeFilePath = System.Reflection.Assembly.GetEntryAssembly().Location;
             string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
             XmlTextReader xtr = new XmlTextReader(strWorkPath + "/AgentCfg.xml");
-            Console.WriteLine("[Info] Getting MySQL Database info:");
+            Log.Info("Getting MySQL Database info:");
             while (xtr.Read())
             {
                 if (xtr.NodeType == XmlNodeType.Element && xtr.Name == "DBIpAddress")

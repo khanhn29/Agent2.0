@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlTypes;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -29,12 +32,12 @@ namespace Agent2._0
             
             if (db.conn.State == System.Data.ConnectionState.Open)
             {
-                Console.WriteLine("[Info] Connected to Database");
+                Log.Info("Connected to Database");
                 LoadCampaigns();
             }
             else
             {
-                Console.WriteLine("[Error] Unable to connect to database");
+                Log.Error("Unable to connect to database");
             }
             RunCalibStationAPI();
             Console.ReadLine();
@@ -43,15 +46,19 @@ namespace Agent2._0
         static void LoadCampaigns()
         {
             List<tblCampaign> ActiveCampaignList = new List<tblCampaign>();
-            MySqlDataReader rdr = db.Reader("SELECT id, created_date, last_updates, log_path FROM tbl_campaign");
+            MySqlDataReader rdr = db.Reader("SELECT id, name, from_date, to_date, log_path FROM tbl_campaign");
             while (rdr.Read())
             {
-                DateTime createTime = DateTime.ParseExact(rdr.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                DateTime lastUpdate = DateTime.ParseExact(rdr.GetString(2), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                if (DateTime.Compare(createTime, now) <= 0 && DateTime.Compare(now, lastUpdate) <= 0)
+                DateTime fromdate = Convert.ToDateTime(rdr["from_date"]);
+                DateTime todate = Convert.ToDateTime(rdr["to_date"]);
+                Int32 id = rdr.GetInt32(0);
+                string campaignName = rdr["name"].ToString();
+                string logPath = rdr["log_path"].ToString();
+
+                if (DateTime.Compare(fromdate, now) <= 0 && DateTime.Compare(now, todate) <= 0)
                 {
-                    Console.WriteLine("[Info] Found campaign: " + rdr.GetString(0) + "--" + rdr.GetString(1) + "--" + rdr.GetString(2) + "--" + rdr.GetString(3));
-                    ActiveCampaignList.Add(new tblCampaign(rdr.GetInt32(0), createTime, lastUpdate, rdr.GetString(3)));
+                    Log.Info("Found campaign: " + id + "--" + campaignName + "--" + fromdate + "--" + todate + "--" + logPath);
+                    ActiveCampaignList.Add(new tblCampaign(id, fromdate, todate, logPath));
                 }
             }
             rdr.Close();
@@ -87,17 +94,120 @@ namespace Agent2._0
                 //Load 4 components
                 Load4Components(campaign);
                 //Load station 5 assemble rru
-
-                //Load remaining station
-
+                LoadStation5AssembleRRU(campaign);
+                //Load test stations
+                LoadTestStations(campaign);
                 svSftp.Disconnect();
             }
             else
             {
-                Console.WriteLine("[Error] Unable to connect to sftp server");
+                Log.Error("Unable to connect to sftp server");
             }
 
         }
+
+        static void LoadTestStations(tblCampaign campaign)
+        {
+            var folders = new List<string>()
+            {
+                "3.1 Luu Serial vao EEPROM RRU",
+                "3.2 Do kiem Tx, Rx",
+                "4. Test kin khi",
+                "5. Burn in",
+                "6. Do kiem TX RX sau burn in",
+                "7. Test kin khi sau burn in",
+                "8.1 OQC Chu trinh nhiet",
+                "8.2 OQC Rung xoc",
+                "9. Do kiem TX RX sau rung xoc, chu trinh nhiet",
+                "10. Package"
+            };
+            string remoteDirectory = campaign.LogPath;
+            string localDirectory = svSftp.LocalDirectory;
+
+            if (svSftp.sftp.Exists(remoteDirectory) == false)
+            {
+                Log.Warning("Folder \"{0}\" of campaign not exist.", remoteDirectory);
+            }
+            else
+            {
+                foreach (var folder in folders)
+                {
+                    if (svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
+                    {
+                        Log.Warning("Folder \"{0}\" not exist.", folder);
+                        try
+                        {
+                            svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
+                            Log.Warning("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                        }
+                        catch (SftpPathNotFoundException)
+                        {
+                            Log.Error("Created folder failed: \"{0}\".", remoteDirectory + "\\" + folder);
+                        }
+                    }
+                    else
+                    {
+                        Log.Info("Reading log from folder: " + folder);
+                        LoadOneStation(remoteDirectory + "\\" + folder + "\\", localDirectory);
+                    }
+                }
+            }
+        }
+
+        static void LoadStation5AssembleRRU(tblCampaign campaign)
+        {
+            string folder = "2. Lap rap RRU";
+            string remoteDirectory = campaign.LogPath;
+            string localDirectory = svSftp.LocalDirectory;
+            if (svSftp.sftp.Exists(remoteDirectory) == false)
+            {
+                Log.Warning("Folder \"{0}\" of campaign not exist.", remoteDirectory);
+            }
+            else
+            {
+                if (svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
+                {
+                    Log.Warning("Folder \"{0}\" not exist.", folder);
+                    try
+                    {
+                        svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
+                        Log.Warning("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                    }
+                    catch (SftpPathNotFoundException)
+                    {
+                        Log.Error("Created folder failed: \"{0}\".", remoteDirectory + "\\" + folder);
+                    }
+                }
+                else
+                {
+                    Log.Info("Reading log from folder: " + folder);
+                    LoadStation5(remoteDirectory + "\\" + folder + "\\", localDirectory);
+                }
+            }
+        }
+
+        static void LoadStation5(string remoteDirectory, string localDirectory)
+        {
+            var files = svSftp.sftp.ListDirectory(remoteDirectory);
+            foreach (SftpFile file in files)
+            {
+                if (!file.Name.StartsWith(".") && file.Name.Contains(".xlsx"))
+                {
+                    string localFilePath = Path.Combine(localDirectory, file.Name);
+                    DownloadLogFile(localFilePath, file.FullName);
+
+                    // If file found, read, save data to db, move remote file to storehouse then delete it
+                    bool ret = ReadLogThenUpdateDb_UpdateRRUStation(localFilePath);
+                    if (ret == true)
+                        MoveFileToStorehouse(remoteDirectory, file);
+                    else
+                        Log.Error("Update database failed!");
+                    System.Threading.Thread.Sleep(100);
+                    File.Delete(localFilePath);
+                }
+            }
+        }
+
         static void Load4Components(tblCampaign campaign)
         {
             var folders = new List<string>()
@@ -112,7 +222,7 @@ namespace Agent2._0
 
             if (svSftp.sftp.Exists(remoteDirectory) == false)
             {
-                Console.WriteLine("[Warning] Folder \"{0}\" of campaign not exist.", remoteDirectory);
+                Log.Warning("Folder \"{0}\" of campaign not exist.", remoteDirectory);
             }
             else
             {
@@ -120,19 +230,19 @@ namespace Agent2._0
                 {
                     if (svSftp.sftp.Exists(remoteDirectory + "/" + folder) == false)
                     {
-                        Console.WriteLine("[Warning] Folder \"{0}\" not exist.", folder);
+                        Log.Warning("Folder \"{0}\" not exist.", folder);
                         try
                         {
                             svSftp.sftp.CreateDirectory(remoteDirectory + "\\" + folder);
-                            Console.WriteLine("[Warning] Created folder \"{0}\".", remoteDirectory + "\\" + folder);
+                            Log.Warning("Created folder \"{0}\".", remoteDirectory + "\\" + folder);
                         }
                         catch (SftpPathNotFoundException) {
-                            Console.WriteLine("[Error] Created folder failed: \"{0}\".", remoteDirectory + "\\" + folder);
+                            Log.Error("Created folder failed: \"{0}\".", remoteDirectory + "\\" + folder);
                         }
                     }
                     else
                     {
-                        Console.WriteLine("[Info] Reading log from folder: " + folder);
+                        Log.Info("Reading log from folder: " + folder);
                         LoadFirst4Stations(remoteDirectory + "\\" + folder + "\\", localDirectory);
                     }
                 }
@@ -151,17 +261,18 @@ namespace Agent2._0
                     DownloadLogFile(localFilePath, file.FullName);
 
                     // If file found, read, save data to db, move remote file to storehouse then delete it
-                    bool ret = ReadLogThenUpdateDb_1(localFilePath);
+                    bool ret = ReadLogThenUpdateDb_UpdateComponentStations(localFilePath);
                     if (ret == true)
                         MoveFileToStorehouse(remoteDirectory, file);
                     else
-                        Console.WriteLine("[Error] Update database failed!");
+                        Log.Error("Update database failed!");
                     System.Threading.Thread.Sleep(100);
                     File.Delete(localFilePath);
                 }  
             }
         }
-        static bool ReadLogThenUpdateDb_1(string localfile)
+
+        static bool ReadLogThenUpdateDb_UpdateComponentStations(string localfile)
         {
             bool ret = true;
             Excel exceltmp = new(localfile, 1);
@@ -177,6 +288,176 @@ namespace Agent2._0
             exceltmp.Close();
             return ret;
         }
+
+        static bool ReadLogThenUpdateDb_UpdateRRUStation(string localfile)
+        {
+            bool ret = true;
+            Excel exceltmp = new(localfile, 1);
+            tblDevice newDevice = new(db, exceltmp);
+            tblDeviceResult newDeviceResult = new(db, exceltmp, newDevice.id);
+
+            //Get components's sn, update thier rru_sn
+            ComponentsSerialNumber componentsInfo = GetComponentsInfoByRRUSN(db, exceltmp);
+
+            ret = FillRRUSN2Components(componentsInfo);
+            newDevice.mac = componentsInfo.mac;
+            newDevice.mac2 = componentsInfo.mac2;
+            newDevice.sn = componentsInfo.sn_rru;
+            if (db.InsertDevice(newDevice) == false ||
+                db.InsertDeviceResult(newDeviceResult) == false ||
+                InsertDetailResults(db, exceltmp, newDeviceResult.id) == false)
+            {
+                ret = false;
+            }
+  
+
+            exceltmp.Close();
+            return ret;
+        }
+
+        private static bool FillRRUSN2Components(ComponentsSerialNumber info)
+        {
+            bool ret = false;
+            if(info.sn_trx == "")
+            {
+                Log.Error("Upate RRU SN to components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+            }
+            else
+            {
+                try
+                {
+                    string insertQuery = "UPDATE tbl_device SET mac=@mac, mac2=@mac2, rru_sn=@rru_sn WHERE sn=@trx_sn";
+                    MySqlCommand cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?mac", MySqlDbType.String).Value = info.mac;
+                    cmd.Parameters.Add("?mac2", MySqlDbType.String).Value = info.mac2;
+                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?trx_sn", MySqlDbType.String).Value = info.sn_trx;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("FillRRUSN2Components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@rru_sn WHERE sn=@pa_sn";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?pa_sn", MySqlDbType.String).Value = info.sn_pa;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_pa + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("FillRRUSN2Components failed: " + info.sn_pa + ": " + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_fil";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?sn_fil", MySqlDbType.String).Value = info.sn_fil;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_fil + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("Upate RRU SN to components failed: " + info.sn_fil + ": " + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_ant";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?sn_ant", MySqlDbType.String).Value = info.sn_ant;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_ant + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("Upate RRU SN to components failed: " + info.sn_ant + ": " + info.sn_rru);
+                        ret = false;
+                    }
+                }
+                catch (MySqlException ex)
+                {
+                    Log.Error("Insert Device: " + ex.Message);
+                    ret = false;
+                }
+
+            }
+                
+            return ret;
+        }
+
+        private static ComponentsSerialNumber GetComponentsInfoByRRUSN(ServerDatabase db, Excel excel)
+        {
+            ComponentsSerialNumber ret = new();
+
+            ret.sn_rru = excel.ReadCell(6, 2);
+            if (!ret.sn_rru.StartsWith("RRU"))
+            {
+                Log.Error("RRU SN in assemble station do not satisfy the format RRU******");
+                ret.sn_rru = "";
+            }
+
+            ret.sn_trx = excel.ReadCell(13, 4);
+            if (!ret.sn_trx.StartsWith("TRX"))
+            {
+                Log.Error("TRX SN in assemble station do not satisfy the format TRX******");
+                ret.sn_trx = "";
+            }
+            else
+            {
+                MySqlDataReader rdr = db.Reader("SELECT mac, mac2 FROM tbl_import_mac_sn WHERE sn = '" + ret.sn_trx + "'");
+                //Read number of device
+                rdr.Read();
+                try
+                {
+                    ret.mac = rdr.GetString(0);
+                    ret.mac2 = rdr.GetString(1);
+                }
+                catch (MySqlException e)
+                {
+                    ret.sn_trx = "";
+                    Log.Error("" + e.Message);
+                }
+                rdr.Close();
+            }
+
+            ret.sn_pa = excel.ReadCell(14, 4);
+            if (!ret.sn_pa.StartsWith("PA"))
+            {
+                Log.Error("PA SN in assemble station do not satisfy the format PA******");
+                ret.sn_pa = "";
+            }
+
+            ret.sn_fil = excel.ReadCell(15, 4);
+            if (!ret.sn_fil.StartsWith("FILTER"))
+            {
+                Log.Error("FILTER SN in assemble station do not satisfy the format FILTER******");
+                ret.sn_fil = "";
+            }
+
+            ret.sn_ant = excel.ReadCell(16, 4);
+            if (!ret.sn_ant.StartsWith("ANT"))
+            {
+                Log.Error("ANT SN in assemble station do not satisfy the format ANT******");
+                ret.sn_ant = "";
+            }
+
+            return ret;
+        }
+
         static void MoveFileToStorehouse(string remotePath, SftpFile file)
         {
             if (svSftp.sftp.Exists(remotePath + "storehouse") == false)
@@ -199,13 +480,22 @@ namespace Agent2._0
 
         static void DownloadLogFile(string localPath, string remotePath)
         {
-            Stream stream;
+            try
+            {
+                Stream stream;
 
-            stream = File.OpenWrite(localPath);
-            Console.WriteLine("[Info] Found file on sftp server: " + remotePath);
-            Console.WriteLine("[Info] Downloading file to: " + localPath);
-            svSftp.sftp.DownloadFile(remotePath, stream, x => Console.WriteLine("[Info] File's size: " + x));
-            stream.Close();
+                stream = File.OpenWrite(localPath);
+                Log.Info("Found file on sftp server: " + remotePath);
+                Log.Info("Downloading file to: " + localPath);
+                svSftp.sftp.DownloadFile(remotePath, stream, x => Log.Info("File's size: " + x));
+                stream.Close();
+            }
+            catch(Exception e)
+            {
+                Log.Error("" + e.Message);
+                KillSpecificExcelFileProcess();
+            }
+
         }
 
         static void LoadOneStation(string remoteDirectory, string localDirectory)
@@ -217,11 +507,11 @@ namespace Agent2._0
                 string remoteFileName = file.Name;
                 if (!file.Name.StartsWith(".") && file.Name.Contains(".xlsx"))
                 {
-                    Console.WriteLine("[Info] Found file on sftp server: " + file.FullName);
+                    Log.Info("Found file on sftp server: " + file.FullName);
                     Stream stream = File.OpenWrite(localDirectory + file.Name);
                     string localFilePath = Path.Combine(localDirectory, file.Name);
-                    svSftp.sftp.DownloadFile(file.FullName, stream, x => Console.WriteLine("[Info] File's size: " + x));
-                    Console.WriteLine("[Info] Downloading file to: " + localFilePath);
+                    svSftp.sftp.DownloadFile(file.FullName, stream, x => Log.Info("File's size: " + x));
+                    Log.Info("Downloading file to: " + localFilePath);
                     stream.Close();
                     if (File.Exists(localFilePath))
                     {
@@ -247,11 +537,11 @@ namespace Agent2._0
                         }
                         else
                         {
-                            Console.WriteLine("[Error] Update database failed!");
+                            Log.Error("Update database failed!");
                         }
                         System.Threading.Thread.Sleep(100);
                         File.Delete(localFilePath);
-                        Console.WriteLine("[Info] Local File deleted.");
+                        Log.Info("Local File deleted.");
                     }
                 }
                 System.Threading.Thread.Sleep(100);
@@ -261,15 +551,47 @@ namespace Agent2._0
         {
             bool ret = true;
             Excel exceltmp = new(localfile, 1);
+            string logSerialNumber = exceltmp.ReadCell(6, 2);
+            int deviceId = 0;
+            int nDevices = db.Count("SELECT COUNT(id) FROM tbl_device where sn='" + logSerialNumber + "'");
 
-            tblDevice newDevice = new(db, exceltmp);
-            tblDeviceResult newDeviceResult = new(db, exceltmp, newDevice.id);
-            if (db.InsertDevice(newDevice) == false ||
-                db.InsertDeviceResult(newDeviceResult) == false ||
-                InsertDetailResults(db, exceltmp, newDeviceResult.id) == false)
+
+            MySqlDataReader rdr = db.Reader("SELECT COUNT(id) FROM tbl_device where sn='" + logSerialNumber + "'");
+            
+            //rdr.Read();
+            //try
+            //{
+            //    deviceId = rdr.GetInt16(0);
+            //}
+            //catch (Exception e)
+            //{
+            //    Log.Error("" + e.Message);
+            //    deviceId = 0;
+            //}
+            //rdr.Close();
+            if(nDevices != 0)
             {
-                ret = false;
+                rdr = db.Reader("SELECT id FROM tbl_device where sn='" + logSerialNumber + "'");
+
+                rdr.Read();
+                try
+                {
+                    deviceId = rdr.GetInt16(0);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("" + e.Message);
+                    deviceId = 0;
+                }
+                rdr.Close();
+                tblDeviceResult newDeviceResult = new(db, exceltmp, deviceId);
+                if (db.InsertDeviceResult(newDeviceResult) == false ||
+                    InsertDetailResults(db, exceltmp, newDeviceResult.id) == false)
+                {
+                    ret = false;
+                }
             }
+
             exceltmp.Close();
             return ret;
         }
@@ -335,7 +657,7 @@ namespace Agent2._0
                 }
                 catch (Exception e)
                 {
-                    Console.WriteLine("[Error] Exception: " + e.Message);
+                    Log.Error("Exception: " + e.Message);
                     var sendBuffer = Encoding.ASCII.GetBytes(e.Message);
                     // gửi kết quả lại cho client
                     socket.Send(sendBuffer);
@@ -352,18 +674,18 @@ namespace Agent2._0
         static ComponentsSerialNumber GetComponentSN(string rru_sn)
         {
             ComponentsSerialNumber myCompnt = new ComponentsSerialNumber();
-
+            myCompnt.sn_rru = rru_sn;
             try
             {
-                Console.WriteLine("[Info] Openning Connection ...");
+                Log.Info("Openning Connection ...");
                 string queryString = "select * from tbl_device where rru_sn = '" + rru_sn + "'";
-                Console.WriteLine("[Info] queryString: " + queryString);
+                Log.Info("queryString: " + queryString);
                 using var command = new MySqlCommand(queryString, db.conn);
                 MySqlDataReader rdr = command.ExecuteReader();
 
                 while (rdr.Read())
                 {
-                    Console.WriteLine("[Info] " +rdr["id"] + "--" + rdr["mac"] + "--" + rdr["sn"] + "--" + rdr["rru_sn"]);
+                    Log.Info("" +rdr["id"] + "--" + rdr["mac"] + "--" + rdr["sn"] + "--" + rdr["rru_sn"]);
                     var sn_component = rdr["sn"].ToString();
                     if (sn_component.IndexOf("TRX") == 0)
                     {
@@ -377,10 +699,6 @@ namespace Agent2._0
                     {
                         myCompnt.sn_fil = sn_component;
                     }
-                    else if (sn_component.IndexOf("PWR") >= 0)
-                    {
-                        myCompnt.sn_pwr = sn_component;
-                    }
                     else if (sn_component.IndexOf("ANT") >= 0)
                     {
                         myCompnt.sn_ant = sn_component;
@@ -393,9 +711,20 @@ namespace Agent2._0
             }
             catch (Exception e)
             {
-                Console.WriteLine("[Error] exception: " + e.Message);
+                Log.Error("exception: " + e.Message);
             }
             return myCompnt;
+        }
+        private static void KillSpecificExcelFileProcess()
+        {
+            var processes = from p in Process.GetProcessesByName("EXCEL")
+                            select p;
+
+            foreach (var process in processes)
+            {
+                if (process.MainWindowTitle == "Microsoft Excel")
+                    process.Kill();
+            }
         }
     }
 }
