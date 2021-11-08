@@ -1,4 +1,5 @@
 ﻿using MySql.Data.MySqlClient;
+using System;
 using System.Data.SqlTypes;
 
 namespace Agent2._0
@@ -41,15 +42,25 @@ namespace Agent2._0
 
             sn = excel.ReadCell(6, 2);
 
-            rdr = db.Reader("SELECT mac, mac2 FROM tbl_import_mac_sn WHERE sn = '" + sn + "'");
+            string queryStr = string.Format("SELECT mac, mac2 FROM tbl_import_mac_sn WHERE sn = '{0}'", sn);
+            rdr = db.Reader(queryStr);
             rdr.Read();
             try{
                 mac = rdr.GetString(0);
+            }
+            catch (Exception e){
+                Log.Error("Mac not found" + e.Message);
+                mac = "";
+            }
+
+            try{
                 mac2 = rdr.GetString(1);
             }
-            catch (MySqlException e){
-                Log.Error("" + e.Message);
+            catch(Exception e){
+                Log.Error("Mac2 not found" + e.Message);
+                mac2 = "";
             }
+
             rdr.Close();
 
             this.id = id;

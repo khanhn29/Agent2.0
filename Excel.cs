@@ -13,6 +13,8 @@ namespace Agent2._0
 
         public string FileSerialNum { get; }
 
+        public string StationName { get; }
+
         public string FileDate { get; }
 
         public String FileResult { get; }
@@ -29,9 +31,16 @@ namespace Agent2._0
             {
                 string FileName = Path.GetFileNameWithoutExtension(path);
                 string[] parts = FileName.Split("_");
-                FileSerialNum = parts[0];
-                FileDate = GetDateFromFileName(parts[1]);
-                FileResult = parts[2];
+                string sn = parts[0];
+                string stationName = parts[1];
+                string timeHHmm = parts[2];
+                string dateddMMyyyy = parts[3];
+                string result = parts[4];
+
+                FileSerialNum = sn;
+                StationName = stationName;
+                FileDate = GetDateFromFileName(dateddMMyyyy);
+                FileResult = result;
             }
             catch(Exception e)
             {
@@ -39,7 +48,7 @@ namespace Agent2._0
                 Console.WriteLine("Exception: " + e.Message);
                 FileSerialNum = "";
                 FileDate = "";
-                FileResult = "";
+                FileResult = "FAIL";
             }
 
             xlApp = new _Excel.Application();
@@ -56,7 +65,7 @@ namespace Agent2._0
             }
             catch (FormatException e)
             {
-                Console.WriteLine("Read date error: " + e.Message);
+                Log.Error("Read date error: " + e.Message);
                 return "";
             }
         }

@@ -49,27 +49,7 @@ namespace Agent2._0
         }
         public bool InsertDevice(tblDevice dv)
         {
-            MySqlDataReader rdr = this.Reader("SELECT COUNT(id) FROM tbl_device WHERE sn='" + dv.sn + "'");
-            Int32 nDevice = 0;
-            rdr.Read();
-            try
-            {
-                nDevice = rdr.GetInt16(0);
-            }
-            catch (SqlNullValueException)
-            {
-                nDevice = 0;
-            }
-            rdr.Close();
-            if (nDevice > 0)
-            {
-                //RRU sn already in tbl_device
-                string insertQuery = "DELETE FROM tbl_device WHERE sn=?sn";
-                MySqlCommand cmd = new MySqlCommand(insertQuery, conn);
-                cmd.Parameters.Add("?sn", MySqlDbType.String).Value = dv.sn;
-                cmd.ExecuteNonQuery();
-            }
-
+            
             if (dv.sn.StartsWith("RRU"))
                 return InsertDeviceRRU(dv);
             else
@@ -80,13 +60,14 @@ namespace Agent2._0
             bool ret = false;
             try
             {
-                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn, inactive) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn, ?inactive)";
                 MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
                 cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
                 cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = dv.mac2;
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
+                cmd.Parameters.Add("?inactive", MySqlDbType.VarChar).Value = "true";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
                     Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
@@ -109,16 +90,17 @@ namespace Agent2._0
         {
             try
             {
-                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn, inactive) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn, ?inactive)";
                 MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
-                cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = "";
-                cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = "";
+                cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
+                cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = dv.mac2;
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = "";
+                cmd.Parameters.Add("?inactive", MySqlDbType.VarChar).Value = "true";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
+                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.mac2 + "," + dv.sn);
                     return true;
                 }
                 else
@@ -131,6 +113,35 @@ namespace Agent2._0
             {
                 Log.Error("Insert Device: " + ex.Message);
                 return false;
+            }
+        }
+        public void DeactivateOldDevices(tblDevice dv)
+        {
+            string queryStr = string.Format("UPDATE tbl_device SET inactive='false', reason='Replaced by Device id={0}' WHERE sn='{1}'", dv.id, dv.sn);
+            MySqlCommand cmd = new MySqlCommand(queryStr, conn);
+            cmd.ExecuteNonQuery();
+        }
+        private void DeleteDevice(tblDevice dv)
+        {
+            MySqlDataReader rdr = this.Reader("SELECT COUNT(id) FROM tbl_device WHERE sn='" + dv.sn + "'");
+            Int32 nDevice = 0;
+            rdr.Read();
+            try
+            {
+                nDevice = rdr.GetInt16(0);
+            }
+            catch (SqlNullValueException)
+            {
+                nDevice = 0;
+            }
+            rdr.Close();
+            if (nDevice > 0)
+            {
+                //RRU sn already in tbl_device
+                string insertQuery = "DELETE FROM tbl_device WHERE sn=?sn";
+                MySqlCommand cmd = new MySqlCommand(insertQuery, conn);
+                cmd.Parameters.Add("?sn", MySqlDbType.String).Value = dv.sn;
+                cmd.ExecuteNonQuery();
             }
         }
         public bool InsertDeviceResult(tblDeviceResult dvR)

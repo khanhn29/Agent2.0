@@ -41,6 +41,14 @@ namespace Agent2._0
             "9. Do kiem TX RX sau rung xoc, chu trinh nhiet",
             "10. Package"
         };
+        static List<string> StationsNameList = new List<string>
+        {
+            "TRX-TEST",
+            "PA-TEST",
+            "FILTER-TEST",
+            "ANT-TEST",
+            "ASSEM-RRU"
+        };
         static void Main(string[] args)
         {
             Console.Title = "Agent 2.0";
@@ -142,6 +150,7 @@ namespace Agent2._0
             {
                 Log.Info("Reading log from folder: " + folder);
                 LoadOneStation(remotePath + "\\" + folder + "\\", localPath, campaign);
+                Log.Info("");
             }
         }
 
@@ -151,33 +160,30 @@ namespace Agent2._0
 
             foreach (SftpFile remoteFile in files)
             {
-                string remoteFileName = remoteFile.Name;
                 if (!remoteFile.Name.StartsWith(".") && !remoteFile.Name.StartsWith("~") && remoteFile.Name.Contains(".xlsx"))
                 {
+                    Log.Info("=============Start=============");
                     Log.Info("Found file on sftp server: " + remoteFile.FullName);
-                    if(VerifyFileSuccess(remoteFile, campaign))
-                    {
+                    if(IsFileValid(remoteFile, campaign)){
                         string localFilePath = Path.Combine(localDirectory, remoteFile.Name);
                         DownloadFile(remoteFile.FullName, localFilePath);
-                        if (File.Exists(localFilePath))
-                        {
+                        if (File.Exists(localFilePath)){
                             bool ret = UpdateFileToSQLDatabase(localFilePath);
                             if (ret == true)
                                 MoveFileToStorehouse(remoteDirectory, remoteFile);
                             else
                                 Log.Error("Update database failed!");
                         }
-                        else
-                        {
+                        else{
                             Log.Error("Download file failed");
                         }
-                        System.Threading.Thread.Sleep(200);
+                        System.Threading.Thread.Sleep(100);
                         File.Delete(localFilePath);
                     }
-                    else
-                    {
+                    else{
                         Log.Error("File not valid to insert to db");
                     }
+                    Log.Info("=============End=============");
                 }
             }
 
@@ -185,37 +191,70 @@ namespace Agent2._0
         static bool UpdateFileToSQLDatabase(string localfile)
         {
             bool ret = true;
+
             Excel exceltmp = new(localfile, 1);
-            //tblDevice newDevice = new(db, exceltmp);
+            var match = StationsNameList
+                .FirstOrDefault(stringToCheck => stringToCheck.Contains(exceltmp.StationName));
+
+            if (match != null)
+            {
+                tblDevice newDevice = new(db, exceltmp);
+                db.DeactivateOldDevices(newDevice);
+                ret = db.InsertDevice(newDevice);
+                if (ret == true)
+                {
+                    string msg = string.Format("Inserted device Id[{0}] Mac[{1}] Mac2[{2}] SN[{3}]",
+                        newDevice.id, newDevice.mac, newDevice.mac2, newDevice.sn);
+                    Log.Info(msg);
+                }
+                if(exceltmp.FileSerialNum.StartsWith("RRU"))
+                {
+                    ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
+                    FillRRUSN2Components(componentsInfo);
+                }
+
+            }
+
             //tblDeviceResult newDeviceResult = new(db, exceltmp, newDevice.id);
 
             exceltmp.Close();
             return ret;
         }
-        static bool VerifyFileSuccess(SftpFile file, tblCampaign campaign)
+        static bool IsFileValid(SftpFile file, tblCampaign campaign)
         {
-            bool ret = false;
+            bool ret = true;
             string FileName = file.Name;
-            string[] parts = FileName.Split("_");
             DateTime fromDate = campaign.FromDate;
             DateTime toDate = campaign.ToDate;
+            string[] parts = FileName.Split("_");
             string sn = parts[0];
+            string stationName = parts[1];
+            string timeHHmm = parts[2];
+            string dateddMMyyyy = parts[3];
+            string result = parts[4];
 
             try
             {
                 Int32 nExist = db.Count("SELECT COUNT(id) FROM tbl_import_mac_sn WHERE sn='" + sn + "'");
-                DateTime fileDate = DateTime.ParseExact(parts[1], "ddMMyyyy", CultureInfo.InvariantCulture);
-                string msg = string.Format("File time info: fromDate[{0}] toDate[{1}] fileDate[{2}] macsnID[{3}]", fromDate, toDate, fileDate, nExist);
+                DateTime fileDate = DateTime.ParseExact(dateddMMyyyy, "ddMMyyyy", CultureInfo.InvariantCulture);
+                string msg = string.Format("File time info: fromDate[{0}] fileDate[{2}] toDate[{1}] macsnID[{3}]", fromDate, toDate, fileDate, nExist);
                 Log.Info(msg);
 
-                if (fromDate <= fileDate && fileDate <= toDate && nExist > 0)
+                if(fileDate < fromDate || toDate < fileDate)
                 {
-                    ret = true;
+                    Log.Error("File " + file.Name + " is not in campaign's duration");
+                    ret = false;
+                }
+                if(nExist == 0)
+                {
+                    Log.Error("SN " + sn + " is not in campaign's plan");
+                    ret = false;
                 }
             }
             catch(Exception e)
             {
                 Log.Error("File name incorrect format" + e.Message);
+                ret = false;
             }
 
             return ret;
@@ -286,7 +325,7 @@ namespace Agent2._0
                 {
                     JObject ob = JObject.Parse(text);
                     JToken sn_rru = ob["sn_rru"];
-                    ComponentsSerialNumber myComponent = GetComponentSN(sn_rru.ToString());
+                    ComponentsSerialNumber myComponent = GetComponentSNInSQLDatabase(sn_rru.ToString());
 
                     var result = JsonConvert.SerializeObject(myComponent);
                     var sendBuffer = Encoding.ASCII.GetBytes(result);
@@ -310,7 +349,138 @@ namespace Agent2._0
                 Array.Clear(receiveBuffer, 0, size);
             }
         }
-        static ComponentsSerialNumber GetComponentSN(string rru_sn)
+        private static bool FillRRUSN2Components(ComponentsSerialNumber info)
+        {
+            bool ret = false;
+            if (info.sn_trx == "")
+            {
+                Log.Error("Upate RRU SN to components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+            }
+            else
+            {
+                try
+                {
+                    string insertQuery = "UPDATE tbl_device SET mac=@mac, mac2=@mac2, rru_sn=@rru_sn WHERE sn=@trx_sn";
+                    MySqlCommand cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?mac", MySqlDbType.String).Value = info.mac;
+                    cmd.Parameters.Add("?mac2", MySqlDbType.String).Value = info.mac2;
+                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?trx_sn", MySqlDbType.String).Value = info.sn_trx;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("FillRRUSN2Components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@rru_sn WHERE sn=@pa_sn";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?pa_sn", MySqlDbType.String).Value = info.sn_pa;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_pa + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("FillRRUSN2Components failed: " + info.sn_pa + ": " + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_fil";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?sn_fil", MySqlDbType.String).Value = info.sn_fil;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_fil + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("Upate RRU SN to components failed: " + info.sn_fil + ": " + info.sn_rru);
+                        ret = false;
+                    }
+
+                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_ant";
+                    cmd = new MySqlCommand(insertQuery, db.conn);
+                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
+                    cmd.Parameters.Add("?sn_ant", MySqlDbType.String).Value = info.sn_ant;
+                    if (cmd.ExecuteNonQuery() == 1)
+                    {
+                        Log.Info("Update Device: " + info.sn_ant + ": " + info.sn_rru);
+                        ret = true;
+                    }
+                    else
+                    {
+                        Log.Error("Upate RRU SN to components failed: " + info.sn_ant + ": " + info.sn_rru);
+                        ret = false;
+                    }
+                }
+                catch (MySqlException ex)
+                {
+                    Log.Error("Insert Device: " + ex.Message);
+                    ret = false;
+                }
+
+            }
+
+            return ret;
+        }
+        private static ComponentsSerialNumber GetComponentSNInExcel(ServerDatabase db, Excel excel)
+        {
+            ComponentsSerialNumber ret = new();
+
+            ret.sn_rru = excel.ReadCell(6, 2);
+            if (!ret.sn_rru.StartsWith("RRU"))
+            {
+                Log.Error("RRU SN in assemble station do not satisfy the format RRU******");
+                ret.sn_rru = "";
+            }
+
+            ret.sn_trx = excel.ReadCell(13, 4);
+            if (!ret.sn_trx.StartsWith("TRX"))
+            {
+                Log.Error("TRX SN in assemble station do not satisfy the format TRX******");
+                ret.sn_trx = "";
+            }
+            else
+            {
+                string macAddress = excel.ReadCell(7, 2);
+                string[] macs = macAddress.Split("/");
+                ret.mac = macs[0];
+                ret.mac2 = macs[1];
+            }
+
+            ret.sn_pa = excel.ReadCell(14, 4);
+            if (!ret.sn_pa.StartsWith("PA"))
+            {
+                Log.Error("PA SN in assemble station do not satisfy the format PA******");
+                ret.sn_pa = "";
+            }
+
+            ret.sn_fil = excel.ReadCell(15, 4);
+            if (!ret.sn_fil.StartsWith("FILTER"))
+            {
+                Log.Error("FILTER SN in assemble station do not satisfy the format FILTER******");
+                ret.sn_fil = "";
+            }
+
+            ret.sn_ant = excel.ReadCell(16, 4);
+            if (!ret.sn_ant.StartsWith("ANT"))
+            {
+                Log.Error("ANT SN in assemble station do not satisfy the format ANT******");
+                ret.sn_ant = "";
+            }
+
+            return ret;
+        }
+        static ComponentsSerialNumber GetComponentSNInSQLDatabase(string rru_sn)
         {
             ComponentsSerialNumber myCompnt = new ComponentsSerialNumber();
             myCompnt.sn_rru = rru_sn;
