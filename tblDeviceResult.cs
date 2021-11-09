@@ -32,7 +32,7 @@ namespace Agent2._0
             latest = 0;
             result = "";
         }
-        public tblDeviceResult(ServerDatabase db, Excel excel, int newDeviceId)
+        public tblDeviceResult(ServerDatabase db, Excel excel, tblCampaign campaign)
         {
             MySqlDataReader rdr = db.Reader("SELECT MAX(id) FROM tbl_device_result");
             rdr.Read();
@@ -43,8 +43,12 @@ namespace Agent2._0
                 id = 1;
             }
             rdr.Close();
-            device_id = newDeviceId;
-            campaign_id = 1;
+
+            string sn = excel.FileSerialNum;
+            string queryStr = string.Format("SELECT id FROM tbl_device WHERE sn='{0}' LIMIT 1", sn);
+            device_id = db.GetInt16(queryStr);
+
+            campaign_id = campaign.Id;
             line = Int16.Parse(excel.ReadCell(3, 2));
             date = GetDate(excel.ReadCell(8, 2));
             time = excel.ReadCell(9, 2);

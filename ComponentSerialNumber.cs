@@ -8,6 +8,7 @@ namespace Agent2._0
 {
     class ComponentsSerialNumber
     {
+        public string FileName { get; set; }
         public string sn_rru { get; set; }
         public string sn_trx {get; set;}
         public string sn_pa { get; set; }

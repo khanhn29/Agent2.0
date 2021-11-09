@@ -10,6 +10,7 @@ namespace Agent2._0
     class Excel
     {
         string path;
+        public string FileName { get; }
 
         public string FileSerialNum { get; }
 
@@ -29,7 +30,7 @@ namespace Agent2._0
 
             try
             {
-                string FileName = Path.GetFileNameWithoutExtension(path);
+                FileName = Path.GetFileNameWithoutExtension(path);
                 string[] parts = FileName.Split("_");
                 string sn = parts[0];
                 string stationName = parts[1];

@@ -168,7 +168,7 @@ namespace Agent2._0
                         string localFilePath = Path.Combine(localDirectory, remoteFile.Name);
                         DownloadFile(remoteFile.FullName, localFilePath);
                         if (File.Exists(localFilePath)){
-                            bool ret = UpdateFileToSQLDatabase(localFilePath);
+                            bool ret = UpdateFileToSQLDatabase(localFilePath, campaign);
                             if (ret == true)
                                 MoveFileToStorehouse(remoteDirectory, remoteFile);
                             else
@@ -178,7 +178,14 @@ namespace Agent2._0
                             Log.Error("Download file failed");
                         }
                         System.Threading.Thread.Sleep(100);
-                        File.Delete(localFilePath);
+                        try
+                        {
+                            File.Delete(localFilePath);
+                        }
+                        catch(Exception e)
+                        {
+                            Log.Error(e.Message);
+                        }
                     }
                     else{
                         Log.Error("File not valid to insert to db");
@@ -188,7 +195,7 @@ namespace Agent2._0
             }
 
         }
-        static bool UpdateFileToSQLDatabase(string localfile)
+        static bool UpdateFileToSQLDatabase(string localfile, tblCampaign campaign)
         {
             bool ret = true;
 
@@ -198,26 +205,86 @@ namespace Agent2._0
 
             if (match != null)
             {
-                tblDevice newDevice = new(db, exceltmp);
-                db.DeactivateOldDevices(newDevice);
-                ret = db.InsertDevice(newDevice);
-                if (ret == true)
+                int countDV = db.Count("SELECT COUNT(id) from tbl_device WHERE sn='" + exceltmp.FileSerialNum + "'");
+                if(countDV == 0)
                 {
-                    string msg = string.Format("Inserted device Id[{0}] Mac[{1}] Mac2[{2}] SN[{3}]",
-                        newDevice.id, newDevice.mac, newDevice.mac2, newDevice.sn);
-                    Log.Info(msg);
+                    tblDevice newDevice = new(db, exceltmp);
+
+                    ret = db.InsertDevice(newDevice);
+                    if (ret == true)
+                    {
+                        string msg = string.Format("Inserted device Id[{0}] Mac[{1}] Mac2[{2}] SN[{3}]",
+                            newDevice.id, newDevice.mac, newDevice.mac2, newDevice.sn);
+                        Log.Info(msg);
+                    }
+                    else
+                    {
+                        Log.Error("Insert device failed");
+                        goto Finish;
+                    }
                 }
-                if(exceltmp.FileSerialNum.StartsWith("RRU"))
+                else
+                {
+                    Log.Warning("Device " + exceltmp.FileSerialNum + " exists in Database, will be update if needed");
+                }
+
+                if (exceltmp.FileSerialNum.StartsWith("RRU"))
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
+                    Log.Info("Fill RRU Serial number");
                     FillRRUSN2Components(componentsInfo);
                 }
-
             }
 
-            //tblDeviceResult newDeviceResult = new(db, exceltmp, newDevice.id);
+            tblDeviceResult newDeviceResult = new(db, exceltmp, campaign);
+            ret = db.InsertDeviceResult(newDeviceResult);
+            if (ret == true)
+            {
+                string msg = string.Format("Inserted DeviceResult Id[{0}] dvID[{1}] CampID[{2}]",
+                    newDeviceResult.id, newDeviceResult.device_id, campaign.Id);
+                Log.Info(msg);
+            }
+            else
+            {
+                Log.Error("Insert device result failed");
+                goto Finish;
+            }
 
+            ret = InsertDetailResults(db, exceltmp, newDeviceResult.id);
+            if (ret == true)
+            {
+                Log.Info("Insert detail result successful");
+            }
+            else
+            {
+                Log.Error("Insert detail result failed");
+                goto Finish;
+            }
+
+        Finish:
             exceltmp.Close();
+            return ret;
+        }
+        static bool InsertDetailResults(ServerDatabase db, Excel excel, int newDeviceResultId)
+        {
+            bool ret = true;
+            int lastRow = excel.ws.UsedRange.Rows.Count;
+            using (var progress = new ProgressBar())
+            {
+                for (int excelRow = 11; excelRow <= lastRow; excelRow++)
+                {
+                    tblDetailResult newDetailResult = new(db, excel, excelRow, newDeviceResultId);
+                    if (db.InsertDetailResult(newDetailResult) != false)
+                    {
+                        progress.Report((double)(excelRow - 11) / (lastRow - 11));
+                    }
+                    else
+                    {
+                        ret = false;
+                        break;
+                    }
+                }
+            }
             return ret;
         }
         static bool IsFileValid(SftpFile file, tblCampaign campaign)
@@ -351,80 +418,85 @@ namespace Agent2._0
         }
         private static bool FillRRUSN2Components(ComponentsSerialNumber info)
         {
-            bool ret = false;
+            bool ret = true;
+            string queryStr;
+            MySqlCommand cmd;
             if (info.sn_trx == "")
             {
-                Log.Error("Upate RRU SN to components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                string errMsg = string.Format("Fill SN failed: sn_rru[{0}], sn_trx[{1}], sn_pa[{2}], sn_fil[{3}], sn_ant[{4}], mac[{5}], mac2[{6}]",
+                    info.sn_rru, info.sn_trx, info.sn_pa, info.sn_fil, info.sn_ant, info.mac, info.mac2);
+                Log.Error(errMsg);
             }
             else
             {
                 try
                 {
-                    string insertQuery = "UPDATE tbl_device SET mac=@mac, mac2=@mac2, rru_sn=@rru_sn WHERE sn=@trx_sn";
-                    MySqlCommand cmd = new MySqlCommand(insertQuery, db.conn);
-                    cmd.Parameters.Add("?mac", MySqlDbType.String).Value = info.mac;
-                    cmd.Parameters.Add("?mac2", MySqlDbType.String).Value = info.mac2;
-                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
-                    cmd.Parameters.Add("?trx_sn", MySqlDbType.String).Value = info.sn_trx;
-                    if (cmd.ExecuteNonQuery() == 1)
+                    string rru_sn = db.GetString("SELECT rru_sn FROM tbl_device WHERE sn='" + info.sn_trx + "'");
+                    if(rru_sn.CompareTo(info.sn_rru) != 0)
                     {
-                        Log.Info("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
-                        ret = true;
-                    }
-                    else
-                    {
-                        Log.Error("FillRRUSN2Components failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
-                        ret = false;
-                    }
-
-                    insertQuery = "UPDATE tbl_device SET rru_sn=@rru_sn WHERE sn=@pa_sn";
-                    cmd = new MySqlCommand(insertQuery, db.conn);
-                    cmd.Parameters.Add("?rru_sn", MySqlDbType.String).Value = info.sn_rru;
-                    cmd.Parameters.Add("?pa_sn", MySqlDbType.String).Value = info.sn_pa;
-                    if (cmd.ExecuteNonQuery() == 1)
-                    {
-                        Log.Info("Update Device: " + info.sn_pa + ": " + info.sn_rru);
-                        ret = true;
-                    }
-                    else
-                    {
-                        Log.Error("FillRRUSN2Components failed: " + info.sn_pa + ": " + info.sn_rru);
-                        ret = false;
+                        string history = db.GetString("SELECT history FROM tbl_device WHERE sn='" + info.sn_trx + "'");
+                        history += string.Format("Old: {0}--New: {1}--Time:{2}--LogFile:{3}\r\n",
+                            rru_sn, info.sn_rru, DateTime.Now.ToString(), info.FileName);
+                        queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', rru_sn='{2}', history='{3}' WHERE sn='{4}'",
+                            info.mac, info.mac2, info.sn_rru, history, info.sn_trx);
+                        cmd = new MySqlCommand(queryStr, db.conn);
+                        if (cmd.ExecuteNonQuery() == 1)
+                        {
+                            Log.Info("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                        }
+                        else
+                        {
+                            Log.Error("Fill SN failed: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                            ret = false;
+                        }
                     }
 
-                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_fil";
-                    cmd = new MySqlCommand(insertQuery, db.conn);
-                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
-                    cmd.Parameters.Add("?sn_fil", MySqlDbType.String).Value = info.sn_fil;
-                    if (cmd.ExecuteNonQuery() == 1)
+                    string[] listCMPNT =
                     {
-                        Log.Info("Update Device: " + info.sn_fil + ": " + info.sn_rru);
-                        ret = true;
-                    }
-                    else
+                        info.sn_pa,
+                        info.sn_fil,
+                        info.sn_ant
+                    };
+
+                    foreach(string cmpnt in listCMPNT)
                     {
-                        Log.Error("Upate RRU SN to components failed: " + info.sn_fil + ": " + info.sn_rru);
-                        ret = false;
+                        rru_sn = db.GetString("SELECT rru_sn FROM tbl_device WHERE sn='" + cmpnt + "'");
+                        if (rru_sn.CompareTo(info.sn_rru) != 0)
+                        {
+                            string history = db.GetString("SELECT history FROM tbl_device WHERE sn='" + cmpnt + "'");
+                            history += string.Format("Old: {0}--New: {1}--Time:{2}--LogFile:{3}\r\n",
+                                            rru_sn, info.sn_rru, DateTime.Now.ToString(), info.FileName);
+                            queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', rru_sn='{2}', history='{3}' WHERE sn='{4}'",
+                                            "", "", info.sn_rru, history, cmpnt);
+                            cmd = new MySqlCommand(queryStr, db.conn);
+                            if (cmd.ExecuteNonQuery() == 1)
+                            {
+                                Log.Info("Update Device: " + cmpnt + ":" + info.sn_rru);
+                            }
+                            else
+                            {
+                                Log.Error("Fill SN failed: " + cmpnt + ":" + info.sn_rru);
+                                ret = false;
+                            }
+                        }
                     }
 
-                    insertQuery = "UPDATE tbl_device SET rru_sn=@sn_rru WHERE sn=@sn_ant";
-                    cmd = new MySqlCommand(insertQuery, db.conn);
-                    cmd.Parameters.Add("?sn_rru", MySqlDbType.String).Value = info.sn_rru;
-                    cmd.Parameters.Add("?sn_ant", MySqlDbType.String).Value = info.sn_ant;
+                    queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', history='InsertTime:{2}' WHERE sn='{3}'",
+                            info.mac, info.mac2, DateTime.Now.ToString(), info.sn_rru);
+                    cmd = new MySqlCommand(queryStr, db.conn);
                     if (cmd.ExecuteNonQuery() == 1)
                     {
-                        Log.Info("Update Device: " + info.sn_ant + ": " + info.sn_rru);
-                        ret = true;
+                        Log.Info("Update Device: " + info.sn_rru);
                     }
                     else
                     {
-                        Log.Error("Upate RRU SN to components failed: " + info.sn_ant + ": " + info.sn_rru);
+                        Log.Error("Fill SN failed: " + info.sn_rru);
                         ret = false;
                     }
                 }
                 catch (MySqlException ex)
                 {
-                    Log.Error("Insert Device: " + ex.Message);
+                    Log.Error(ex.Message);
                     ret = false;
                 }
 
@@ -435,6 +507,8 @@ namespace Agent2._0
         private static ComponentsSerialNumber GetComponentSNInExcel(ServerDatabase db, Excel excel)
         {
             ComponentsSerialNumber ret = new();
+
+            ret.FileName = excel.FileName;
 
             ret.sn_rru = excel.ReadCell(6, 2);
             if (!ret.sn_rru.StartsWith("RRU"))
@@ -480,7 +554,7 @@ namespace Agent2._0
 
             return ret;
         }
-        static ComponentsSerialNumber GetComponentSNInSQLDatabase(string rru_sn)
+        private static ComponentsSerialNumber GetComponentSNInSQLDatabase(string rru_sn)
         {
             ComponentsSerialNumber myCompnt = new ComponentsSerialNumber();
             myCompnt.sn_rru = rru_sn;

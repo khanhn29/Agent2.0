@@ -47,6 +47,42 @@ namespace Agent2._0
                 return null;
             }
         }
+        public string GetString(string queryString)
+        {
+            string ret = "";
+
+            MySqlDataReader rdr = this.Reader(queryString);
+            rdr.Read();
+            try
+            {
+                ret = rdr.GetString(0);
+            }
+            catch (Exception e)
+            {
+            }
+            rdr.Close();
+
+            Log.Info(queryString + " result: " + ret);
+            return ret;
+        }
+        public int GetInt16(string queryString)
+        {
+            int ret = 0;
+
+            MySqlDataReader rdr = this.Reader(queryString);
+            rdr.Read();
+            try
+            {
+                ret = rdr.GetInt16(0);
+            }
+            catch (Exception e)
+            {
+            }
+            rdr.Close();
+
+            Log.Info(queryString + " result: " + ret);
+            return ret;
+        }
         public bool InsertDevice(tblDevice dv)
         {
             
@@ -60,14 +96,13 @@ namespace Agent2._0
             bool ret = false;
             try
             {
-                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn, inactive) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn, ?inactive)";
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
                 MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
                 cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
                 cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = dv.mac2;
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
-                cmd.Parameters.Add("?inactive", MySqlDbType.VarChar).Value = "true";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
                     Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
@@ -90,14 +125,13 @@ namespace Agent2._0
         {
             try
             {
-                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn, inactive) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn, ?inactive)";
+                string insertQuery = "INSERT INTO tbl_device(id, mac, mac2, sn, rru_sn) VALUE(?id, ?mac, ?mac2, ?sn, ?rru_sn)";
                 MySqlCommand cmd = new MySqlCommand(insertQuery, this.conn);
                 cmd.Parameters.Add("?id", MySqlDbType.Int16).Value = dv.id;
                 cmd.Parameters.Add("?mac", MySqlDbType.VarChar).Value = dv.mac;
                 cmd.Parameters.Add("?mac2", MySqlDbType.VarChar).Value = dv.mac2;
                 cmd.Parameters.Add("?sn", MySqlDbType.VarChar).Value = dv.sn;
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = "";
-                cmd.Parameters.Add("?inactive", MySqlDbType.VarChar).Value = "true";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
                     Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.mac2 + "," + dv.sn);
@@ -114,12 +148,6 @@ namespace Agent2._0
                 Log.Error("Insert Device: " + ex.Message);
                 return false;
             }
-        }
-        public void DeactivateOldDevices(tblDevice dv)
-        {
-            string queryStr = string.Format("UPDATE tbl_device SET inactive='false', reason='Replaced by Device id={0}' WHERE sn='{1}'", dv.id, dv.sn);
-            MySqlCommand cmd = new MySqlCommand(queryStr, conn);
-            cmd.ExecuteNonQuery();
         }
         private void DeleteDevice(tblDevice dv)
         {
