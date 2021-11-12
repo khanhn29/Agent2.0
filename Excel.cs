@@ -99,7 +99,6 @@ namespace Agent2._0
             try
             {
                 KillExcel(this.xlApp);
-                //System.Threading.Thread.Sleep(100);
             }
             catch(Exception e)
             {

@@ -1,5 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
+using System.Collections;
 using System.Data.SqlTypes;
 using System.Globalization;
 
@@ -34,6 +35,25 @@ namespace Agent2._0
         }
         public tblDeviceResult(ServerDatabase db, Excel excel, tblCampaign campaign)
         {
+            Hashtable stationnameNums = new Hashtable()
+            {
+                {"TRX-TEST", 1},
+                {"PA-TEST", 2},
+                {"FILTER-TEST", 3},
+                {"ANT-TEST", 4},
+                {"ASSEM-RRU", 5},
+                {"SAVE-DATA", 6},
+                {"PERFORMANCE-TEST", 7},
+                {"AIR-TEST", 8},
+                {"RRU-BURN-IN", 9},
+                {"TEST-TRX-BURN-IN", 10},
+                {"AIR-TEST-AFTER-BURN-IN", 11},
+                {"THERMAL-CYCLE", 12},
+                {"VIBRATION-TEST", 13},
+                {"PERFORMANCE-TEST-AFTER-VIBRATION", 14},
+                {"PACKAGE", 15}
+            };
+
             MySqlDataReader rdr = db.Reader("SELECT MAX(id) FROM tbl_device_result");
             rdr.Read();
             try{
@@ -52,7 +72,7 @@ namespace Agent2._0
             line = Int16.Parse(excel.ReadCell(3, 2));
             date = GetDate(excel.ReadCell(8, 2));
             time = excel.ReadCell(9, 2);
-            station_name = excel.ReadCell(2, 2);
+            station_name = stationnameNums[excel.ReadCell(2, 2)].ToString();
             tester_name = excel.ReadCell(4, 2);
             tester_id = excel.ReadCell(5, 2);
             latest = 1;

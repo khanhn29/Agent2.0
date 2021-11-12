@@ -206,10 +206,10 @@ namespace Agent2._0
             if (match != null)
             {
                 int countDV = db.Count("SELECT COUNT(id) from tbl_device WHERE sn='" + exceltmp.FileSerialNum + "'");
-                if(countDV == 0)
-                {
-                    tblDevice newDevice = new(db, exceltmp);
+                tblDevice newDevice = new(db, exceltmp);
 
+                if (countDV == 0)
+                {
                     ret = db.InsertDevice(newDevice);
                     if (ret == true)
                     {
@@ -226,6 +226,7 @@ namespace Agent2._0
                 else
                 {
                     Log.Warning("Device " + exceltmp.FileSerialNum + " exists in Database, will be update if needed");
+                    db.UpdateDevice(newDevice);
                 }
 
                 if (exceltmp.FileSerialNum.StartsWith("RRU"))
@@ -588,6 +589,10 @@ namespace Agent2._0
                     }
                 }
                 rdr.Close();
+
+                //myCompnt.sn_trx = 
+                myCompnt.mac = db.GetString("Select mac from tbl_device where sn = '" + rru_sn + "' LIMIT 1");
+                myCompnt.mac2 = db.GetString("Select mac2 from tbl_device where sn = '" + rru_sn + "' LIMIT 1");
 
 
                 //var result = JsonConvert.SerializeObject(myCompnt);
