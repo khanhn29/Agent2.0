@@ -47,7 +47,17 @@ namespace Agent2._0
             "PA-TEST",
             "FILTER-TEST",
             "ANT-TEST",
-            "ASSEM-RRU"
+            "ASSEM-RRU",
+            "SAVE-DATA",
+            "PERFORMANCE-TEST",
+            "AIR-TEST",
+            "RRU-BURN-IN",
+            "TEST-TRX-BURN-IN",
+            "AIR-TEST-AFTER-BURN-IN",
+            "THERMAL-CYCLE",
+            "VIBRATION-TEST",
+            "PERFORMANCE-TEST-AFTER-VIBRATION",
+            "PACKAGE"
         };
         static void Main(string[] args)
         {
@@ -229,7 +239,7 @@ namespace Agent2._0
                     db.UpdateDevice(newDevice);
                 }
 
-                if (exceltmp.FileSerialNum.StartsWith("RRU"))
+                if (exceltmp.FileSerialNum.StartsWith("RRU") && exceltmp.StationName.Contains("ASSEM-RRU"))
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
                     Log.Info("Fill RRU Serial number");
