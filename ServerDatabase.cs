@@ -92,11 +92,11 @@ namespace Agent2._0
             string history = "";
 
             history = this.GetString("SELECT history FROM tbl_device WHERE sn='" + dv.sn + "'");
-            if (!mac.Equals(dv.mac))
+            if (dv.mac != "" && !mac.Equals(dv.mac))
             {
                 history += string.Format("Old mac: {0}--New: {1}--Time:{2}\r\n", mac, dv.mac, DateTime.Now.ToString());
             }
-            if (!mac2.Equals(dv.mac2))
+            if (dv.mac2 != "" && !mac2.Equals(dv.mac2))
             {
                 history += string.Format("Old mac2: {0}--New: {1}--Time:{2}\r\n", mac, dv.mac2, DateTime.Now.ToString());
             }

@@ -210,8 +210,7 @@ namespace Agent2._0
             bool ret = true;
 
             Excel exceltmp = new(localfile, 1);
-            var match = StationsNameList
-                .FirstOrDefault(stringToCheck => stringToCheck.Contains(exceltmp.StationName));
+            var match = StationsNameList.FirstOrDefault(stringToCheck => stringToCheck.Contains(exceltmp.StationName));
 
             if (match != null)
             {
