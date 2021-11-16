@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net5.0</TargetFramework>
     <RootNamespace>Agent2._0</RootNamespace>
-    <ApplicationIcon>supply_chain_distribution_industry_production_icon_191381.ico</ApplicationIcon>
+    <ApplicationIcon>iconfinder-fastwebsiteloadspeed-4417092_116619.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

@@ -72,7 +72,7 @@ namespace Agent2._0
             line = Int16.Parse(excel.ReadCell(3, 2));
             date = GetDate(excel.ReadCell(8, 2));
             time = excel.ReadCell(9, 2);
-            station_name = excel.StationName;
+            station_name = stationnameNums[excel.StationName].ToString();
             tester_name = excel.ReadCell(4, 2);
             tester_id = excel.ReadCell(5, 2);
             latest = 1;

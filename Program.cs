@@ -13,6 +13,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Renci.SshNet.Common;
 using Renci.SshNet.Sftp;
+using IExcel = Microsoft.Office.Interop.Excel;
 
 namespace Agent2._0
 {
@@ -68,6 +69,7 @@ namespace Agent2._0
 
             if (db.conn.State == System.Data.ConnectionState.Open)
             {
+                KillSpecificExcelFileProcess();
                 Log.Info("Connected to Database");
                 LoadCampaigns();
             }
@@ -278,7 +280,8 @@ namespace Agent2._0
         static bool InsertDetailResults(ServerDatabase db, Excel excel, int newDeviceResultId)
         {
             bool ret = true;
-            int lastRow = excel.ws.UsedRange.Rows.Count;
+            long fullRow = excel.ws.UsedRange.Rows.Count;
+            long lastRow = excel.ws.Cells[fullRow + 100, 1].End(IExcel.XlDirection.xlUp).Row;
             using (var progress = new ProgressBar())
             {
                 for (int excelRow = 11; excelRow <= lastRow; excelRow++)
