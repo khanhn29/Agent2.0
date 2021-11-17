@@ -90,28 +90,34 @@ namespace Agent2._0
             string mac2 = this.GetString("Select mac2 from tbl_device where sn='" + dv.sn + "' limit 1");
             //string rruSerialNumber = this.GetString("Select rru_sn from tbl_device where sn='" + dv.sn + "' limit 1");
             string history = "";
+            bool needUpdate = false;
 
             history = this.GetString("SELECT history FROM tbl_device WHERE sn='" + dv.sn + "'");
             if (dv.mac != "" && !mac.Equals(dv.mac))
             {
                 history += string.Format("Old mac: {0}--New: {1}--Time:{2}\r\n", mac, dv.mac, DateTime.Now.ToString());
+                needUpdate = true;
             }
             if (dv.mac2 != "" && !mac2.Equals(dv.mac2))
             {
                 history += string.Format("Old mac2: {0}--New: {1}--Time:{2}\r\n", mac, dv.mac2, DateTime.Now.ToString());
+                needUpdate = true;
             }
 
-            string queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', history='{2}' WHERE sn='{3}'",
-            dv.mac, dv.mac2, history, dv.sn);
-            MySqlCommand cmd = new MySqlCommand(queryStr, this.conn);
-            if (cmd.ExecuteNonQuery() == 1)
+            if(needUpdate)
             {
-                Log.Info("Update Device: " + queryStr);
-            }
-            else
-            {
-                Log.Error("Fill SN failed: " + queryStr);
-                ret = false;
+                string queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', history='{2}' WHERE sn='{3}'",
+                    dv.mac, dv.mac2, history, dv.sn);
+                MySqlCommand cmd = new MySqlCommand(queryStr, this.conn);
+                if (cmd.ExecuteNonQuery() == 1)
+                {
+                    Log.Info("Update Device: " + queryStr);
+                }
+                else
+                {
+                    Log.Error("Fill SN failed: " + queryStr);
+                    ret = false;
+                }
             }
 
             return ret;

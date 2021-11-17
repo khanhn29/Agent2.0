@@ -67,6 +67,14 @@ namespace Agent2._0
             db = new ServerDatabase(dbSvInfo);
             svSftp = new ServerSftp(sftpSvInfo);
 
+            UpdateLog();
+
+            RunCalibStationAPI();
+            Console.ReadLine();
+        }
+
+        static void UpdateLog()
+        {
             if (db.conn.State == System.Data.ConnectionState.Open)
             {
                 KillSpecificExcelFileProcess();
@@ -77,8 +85,6 @@ namespace Agent2._0
             {
                 Log.Error("Unable to connect to database");
             }
-            RunCalibStationAPI();
-            Console.ReadLine();
         }
 
         static void LoadCampaigns()
@@ -240,7 +246,7 @@ namespace Agent2._0
                     db.UpdateDevice(newDevice);
                 }
 
-                if (exceltmp.FileSerialNum.StartsWith("RRU") && exceltmp.StationName.Contains("ASSEM-RRU"))
+                if (exceltmp.StationName.Contains("ASSEM-RRU"))
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
                     Log.Info("Fill RRU Serial number");
@@ -307,6 +313,13 @@ namespace Agent2._0
             DateTime fromDate = campaign.FromDate;
             DateTime toDate = campaign.ToDate;
             string[] parts = FileName.Split("_");
+            if (parts.Length != 5)
+            {
+                Log.Error("File name is not match format <SerialNum>_<StationName>_<Time>_<Date>_<Result>");
+                ret = false;
+                goto finish;
+            }
+                
             string sn = parts[0];
             string stationName = parts[1];
             string timeHHmm = parts[2];
@@ -336,7 +349,7 @@ namespace Agent2._0
                 Log.Error("File name incorrect format" + e.Message);
                 ret = false;
             }
-
+            finish:
             return ret;
         }
         static void DownloadFile(string remotePath, string localPath)
@@ -437,7 +450,7 @@ namespace Agent2._0
             if (info.sn_trx == "")
             {
                 string errMsg = string.Format("Fill SN failed: sn_rru[{0}], sn_trx[{1}], sn_pa[{2}], sn_fil[{3}], sn_ant[{4}], mac[{5}], mac2[{6}]",
-                    info.sn_rru, info.sn_trx, info.sn_pa, info.sn_fil, info.sn_ant, info.mac, info.mac2);
+                    info.sn_rru, info.sn_trx, info.sn_pa1, info.sn_fil, info.sn_ant, info.mac, info.mac2);
                 Log.Error(errMsg);
             }
             else
@@ -466,7 +479,8 @@ namespace Agent2._0
 
                     string[] listCMPNT =
                     {
-                        info.sn_pa,
+                        info.sn_pa1,
+                        info.sn_pa2,
                         info.sn_fil,
                         info.sn_ant
                     };
@@ -524,46 +538,21 @@ namespace Agent2._0
             ret.FileName = excel.FileName;
 
             ret.sn_rru = excel.ReadCell(6, 2);
-            if (!ret.sn_rru.StartsWith("RRU"))
-            {
-                Log.Error("RRU SN in assemble station do not satisfy the format RRU******");
-                ret.sn_rru = "";
-            }
 
             ret.sn_trx = excel.ReadCell(13, 4);
-            if (!ret.sn_trx.StartsWith("TRX"))
-            {
-                Log.Error("TRX SN in assemble station do not satisfy the format TRX******");
-                ret.sn_trx = "";
-            }
-            else
-            {
-                string macAddress = excel.ReadCell(7, 2);
-                string[] macs = macAddress.Split("/");
-                ret.mac = macs[0];
-                ret.mac2 = macs[1];
-            }
 
-            ret.sn_pa = excel.ReadCell(14, 4);
-            if (!ret.sn_pa.StartsWith("PA"))
-            {
-                Log.Error("PA SN in assemble station do not satisfy the format PA******");
-                ret.sn_pa = "";
-            }
+            string macAddress = excel.ReadCell(7, 2);
+            string[] macs = macAddress.Split("/");
+            ret.mac = macs[0];
+            ret.mac2 = macs[1];
 
-            ret.sn_fil = excel.ReadCell(15, 4);
-            if (!ret.sn_fil.StartsWith("FILTER"))
-            {
-                Log.Error("FILTER SN in assemble station do not satisfy the format FILTER******");
-                ret.sn_fil = "";
-            }
+            ret.sn_fil = excel.ReadCell(14, 4);
 
-            ret.sn_ant = excel.ReadCell(16, 4);
-            if (!ret.sn_ant.StartsWith("ANT"))
-            {
-                Log.Error("ANT SN in assemble station do not satisfy the format ANT******");
-                ret.sn_ant = "";
-            }
+            ret.sn_ant = excel.ReadCell(15, 4);
+
+            ret.sn_pa1 = excel.ReadCell(16, 4);
+
+            ret.sn_pa2 = excel.ReadCell(17, 4);
 
             return ret;
         }
@@ -583,15 +572,18 @@ namespace Agent2._0
                 {
                     Log.Info("" + rdr["id"] + "--" + rdr["mac"] + "--" + rdr["sn"] + "--" + rdr["rru_sn"]);
                     var sn_component = rdr["sn"].ToString();
-                    if (sn_component.IndexOf("TRX") == 0)
+                    if (sn_component.IndexOf("MTR") >= 0)
                     {
                         myCompnt.sn_trx = sn_component;
                     }
-                    else if (sn_component.IndexOf("PA") >= 0)
+                    else if (sn_component.IndexOf("MPA") >= 0)
                     {
-                        myCompnt.sn_pa = sn_component;
+                        if (myCompnt.sn_pa1 != "")
+                            myCompnt.sn_pa2 = sn_component;
+                        else
+                            myCompnt.sn_pa1 = sn_component;
                     }
-                    else if (sn_component.IndexOf("FIL") >= 0)
+                    else if (sn_component.IndexOf("MFL") >= 0)
                     {
                         myCompnt.sn_fil = sn_component;
                     }
@@ -602,7 +594,6 @@ namespace Agent2._0
                 }
                 rdr.Close();
 
-                //myCompnt.sn_trx = 
                 myCompnt.mac = db.GetString("Select mac from tbl_device where sn = '" + rru_sn + "' LIMIT 1");
                 myCompnt.mac2 = db.GetString("Select mac2 from tbl_device where sn = '" + rru_sn + "' LIMIT 1");
 
