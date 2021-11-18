@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -8,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -19,11 +19,8 @@ namespace Agent2._0
 {
     class Program
     {
-        static InfoServerDB dbSvInfo = new InfoServerDB();
-        static InfoServerSftp sftpSvInfo = new InfoServerSftp();
         static ServerDatabase db;
         static ServerSftp svSftp;
-        static DateTime now = DateTime.Now;
         static List<string> folders = new List<string>()
         {
             "1.1 Do kiem TRX",
@@ -63,28 +60,48 @@ namespace Agent2._0
         static void Main(string[] args)
         {
             Console.Title = "Agent 2.0";
-            // Init server
-            db = new ServerDatabase(dbSvInfo);
-            svSftp = new ServerSftp(sftpSvInfo);
+            try
+            {
+                bool successfulConnectionSFTP = false;
+                while(!successfulConnectionSFTP)
+                {
+                    System.Threading.Thread.Sleep(1000);
+                    successfulConnectionSFTP = ConnectSFTP();
+                }
+                bool successfulConnectionMySQP = false;
+                while (!successfulConnectionMySQP)
+                {
+                    System.Threading.Thread.Sleep(1000);
+                    successfulConnectionMySQP = ConnectMySQL();
+                }
+                KillSpecificExcelFileProcess();
+                Thread StationAPIThrd = new(RunCalibStationAPI);
+                Thread LoadLogThrd = new(LoadCampaigns);
 
-            UpdateLog();
-
-            RunCalibStationAPI();
+                StationAPIThrd.Start();
+                LoadLogThrd.Start();
+            }
+            catch(Exception e)
+            {
+                Log.Error(e.Message);
+            }
+            //svSftp.Disconnect();
             Console.ReadLine();
         }
 
-        static void UpdateLog()
+        static bool ConnectSFTP()
         {
-            if (db.conn.State == System.Data.ConnectionState.Open)
-            {
-                KillSpecificExcelFileProcess();
-                Log.Info("Connected to Database");
-                LoadCampaigns();
-            }
-            else
-            {
-                Log.Error("Unable to connect to database");
-            }
+            InfoServerSftp sftpSvInfo = new InfoServerSftp();
+            svSftp = new ServerSftp(sftpSvInfo);
+            svSftp.Connect();
+            return svSftp.sftp.IsConnected;
+        }
+        static bool ConnectMySQL()
+        {
+            InfoServerDB dbSvInfo = new InfoServerDB();
+            db = new ServerDatabase(dbSvInfo);
+            db.Open();
+            return db.conn.State == System.Data.ConnectionState.Open;
         }
 
         static void LoadCampaigns()
@@ -98,7 +115,7 @@ namespace Agent2._0
                 Int32 id = rdr.GetInt32(0);
                 string campaignName = rdr["name"].ToString();
                 string logPath = rdr["log_path"].ToString();
-
+                DateTime now = DateTime.Now;
                 if (DateTime.Compare(fromdate, now) <= 0 && DateTime.Compare(now, todate) <= 0)
                 {
                     Log.Info("Found campaign: " + id + "--" + campaignName + "--" + fromdate + "--" + todate + "--" + logPath);
@@ -111,24 +128,12 @@ namespace Agent2._0
             {
                 LoadCampaign(campaign);
             }
-
         }
 
         static void LoadCampaign(tblCampaign campaign)
         {
-            svSftp.Connect();
-            if (svSftp.sftp.IsConnected)
-            {
-                ValidateCampaignfolder(campaign);
-
-                LoadAllStations(campaign);
-                svSftp.Disconnect();
-            }
-            else
-            {
-                Log.Error("Unable to connect to sftp server");
-            }
-
+            ValidateCampaignfolder(campaign);
+            LoadAllStations(campaign);
         }
         static void ValidateCampaignfolder(tblCampaign campaign)
         {
@@ -250,7 +255,8 @@ namespace Agent2._0
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
                     Log.Info("Fill RRU Serial number");
-                    FillRRUSN2Components(componentsInfo);
+                    //FillRRUSN2Components(componentsInfo);
+                    FillRRUSerialNumToComponents_2(componentsInfo);
                 }
             }
 
@@ -531,27 +537,73 @@ namespace Agent2._0
 
             return ret;
         }
+        private static bool FillRRUSerialNumToComponents_2(ComponentsSerialNumber info)
+        {
+            bool ret = true;
+
+            string[] listCMPNT =
+                {
+                    info.sn_rru,
+                    info.sn_trx,
+                    info.sn_fil,
+                    info.sn_ant,
+                    info.sn_pa1,
+                    info.sn_pa2
+                };
+            foreach (string cmpnt in listCMPNT)
+            {
+                if(db.Count("SELECT COUNT(id) FROM tbl_device WHERE sn='" + cmpnt + "'") > 0)
+                {
+                    string currentRRUSN = db.GetString("SELECT rru_sn FROM tbl_device WHERE sn = '" + cmpnt + "'");
+                    if (currentRRUSN != info.sn_rru)
+                    {
+                        string history = db.GetString("SELECT history FROM tbl_device WHERE sn='" + cmpnt + "'");
+                        history += string.Format("Old: {0}--New: {1}--Time:{2}--LogFile:{3}\r\n",
+                            currentRRUSN, info.sn_rru, DateTime.Now.ToString(), info.FileName);
+                        string queryStr = "UPDATE tbl_device SET rru_sn='" + info.sn_rru
+                            + "', history='" + history
+                            + "' WHERE sn='"+ cmpnt + "'";
+                        db.ExecuteNonQuery(queryStr);
+                    }
+                }
+                else
+                {
+                    string history = string.Format("Insert time:" + DateTime.Now.ToString());
+                    int id = db.GetInt16("SELECT MAX(id) FROM tbl_device") + 1;
+                    string queryStr = string.Format("INSERT INTO tbl_device (id, mac, mac2, sn, rru_sn, history)" +
+                        " VALUES('{0}', '{1}', '{2}', '{3}', '{4}', '{5}')",
+                        id, "", "", cmpnt, info.sn_rru, history);
+                    db.ExecuteNonQuery(queryStr);
+                }
+            }
+
+            if(info.sn_trx != "")
+            {
+                string queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', rru_sn='{2}' WHERE sn='{3}'",
+                                info.mac, info.mac2, info.sn_rru, info.sn_trx);
+                db.ExecuteNonQuery(queryStr);
+            }
+            if (info.sn_rru != "")
+            {
+                string queryStr = string.Format("UPDATE tbl_device SET mac='{0}', mac2='{1}', rru_sn='{2}' WHERE sn='{3}'",
+                                info.mac, info.mac2, info.sn_rru, info.sn_rru);
+                db.ExecuteNonQuery(queryStr);
+            }
+
+            return ret;
+        }
         private static ComponentsSerialNumber GetComponentSNInExcel(ServerDatabase db, Excel excel)
         {
             ComponentsSerialNumber ret = new();
 
             ret.FileName = excel.FileName;
-
             ret.sn_rru = excel.ReadCell(6, 2);
-
             ret.sn_trx = excel.ReadCell(13, 4);
-
-            string macAddress = excel.ReadCell(7, 2);
-            string[] macs = macAddress.Split("/");
-            ret.mac = macs[0];
-            ret.mac2 = macs[1];
-
+            ret.mac = db.GetString("SELECT mac FROM tbl_import_mac_sn WHERE sn = '" + ret.sn_trx + "'");
+            ret.mac2 = db.GetString("SELECT mac2 FROM tbl_import_mac_sn WHERE sn = '" + ret.sn_trx + "'");
             ret.sn_fil = excel.ReadCell(14, 4);
-
             ret.sn_ant = excel.ReadCell(15, 4);
-
             ret.sn_pa1 = excel.ReadCell(16, 4);
-
             ret.sn_pa2 = excel.ReadCell(17, 4);
 
             return ret;

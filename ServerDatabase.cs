@@ -17,15 +17,17 @@ namespace Agent2._0
             stringBuilder["Port"] = db.Port;
             String sqlConnectionString = stringBuilder.ToString();
             this.conn = new MySqlConnection(sqlConnectionString);
+        }
+        public void Open()
+        {
             try
             {
                 this.conn.Open();
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                Log.Error("Create server database error: " + e.Message);
+                Log.Error("Open server database error: " + e.Message);
             }
-            
         }
         public void Close()
         {
@@ -296,6 +298,22 @@ namespace Agent2._0
                 Log.Error("Exception" + e.Message);
             }
 
+            return ret;
+        }
+
+        public bool ExecuteNonQuery(string queryString)
+        {
+            bool ret = true;
+            MySqlCommand cmd = new MySqlCommand(queryString, conn);
+            if (cmd.ExecuteNonQuery() == 1)
+            {
+                Log.Info("Execute SQL Command: " + queryString);
+            }
+            else
+            {
+                Log.Error("Execute SQL Command failed: " + queryString);
+                ret = false;
+            }
             return ret;
         }
 
