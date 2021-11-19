@@ -19,6 +19,7 @@ namespace Agent2._0
 {
     class Program
     {
+        public static bool DebugMode = true;
         static ServerDatabase db;
         static ServerSftp svSftp;
         static List<string> folders = new List<string>()
@@ -237,7 +238,7 @@ namespace Agent2._0
                     {
                         string msg = string.Format("Inserted device Id[{0}] Mac[{1}] Mac2[{2}] SN[{3}]",
                             newDevice.id, newDevice.mac, newDevice.mac2, newDevice.sn);
-                        Log.Info(msg);
+                        Log.Debug(msg);
                     }
                     else
                     {
@@ -254,19 +255,21 @@ namespace Agent2._0
                 if (exceltmp.StationName.Contains("ASSEM-RRU"))
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
-                    Log.Info("Fill RRU Serial number");
+                    componentsInfo.Print();
+                    Log.Debug("Fill RRU Serial number");
                     //FillRRUSN2Components(componentsInfo);
                     FillRRUSerialNumToComponents_2(componentsInfo);
                 }
             }
 
             tblDeviceResult newDeviceResult = new(db, exceltmp, campaign);
+            db.ExecuteNonQuery("UPDATE tbl_device_result SET latest='0' where device_id='"+newDeviceResult.device_id+"'");
             ret = db.InsertDeviceResult(newDeviceResult);
             if (ret == true)
             {
                 string msg = string.Format("Inserted DeviceResult Id[{0}] dvID[{1}] CampID[{2}]",
                     newDeviceResult.id, newDeviceResult.device_id, campaign.Id);
-                Log.Info(msg);
+                Log.Debug(msg);
             }
             else
             {
@@ -277,7 +280,7 @@ namespace Agent2._0
             ret = InsertDetailResults(db, exceltmp, newDeviceResult.id);
             if (ret == true)
             {
-                Log.Info("Insert detail result successful");
+                Log.Debug("Insert detail result successful");
             }
             else
             {
@@ -334,27 +337,43 @@ namespace Agent2._0
 
             try
             {
-                Int32 nExist = db.Count("SELECT COUNT(id) FROM tbl_import_mac_sn WHERE sn='" + sn + "'");
                 DateTime fileDate = DateTime.ParseExact(dateddMMyyyy, "ddMMyyyy", CultureInfo.InvariantCulture);
-                string msg = string.Format("File time info: fromDate[{0}] fileDate[{2}] toDate[{1}] macsnID[{3}]", fromDate, toDate, fileDate, nExist);
-                Log.Info(msg);
-
-                if(fileDate < fromDate || toDate < fileDate)
+                if (fileDate < fromDate || toDate < fileDate)
                 {
                     Log.Error("File " + file.Name + " is not in campaign's duration");
                     ret = false;
                 }
-                if(nExist == 0)
-                {
-                    Log.Error("SN " + sn + " is not in campaign's plan");
-                    ret = false;
-                }
             }
-            catch(Exception e)
+            catch
             {
-                Log.Error("File name incorrect format" + e.Message);
+                Log.Error("Invalid Date format(ddMMyyyy) in file name: " + dateddMMyyyy);
                 ret = false;
             }
+
+            Int32 nExist = db.Count("SELECT COUNT(id) FROM tbl_import_mac_sn WHERE sn='" + sn + "'");
+            if(nExist == 0)
+            {
+                Log.Error("SN " + sn + " is not in campaign's plan");
+                ret = false;
+            }
+
+            var match = StationsNameList.FirstOrDefault(stringToCheck => stringToCheck.Contains(stationName));
+            if (match == null)
+            {
+                Log.Error("Invalid station name: " + stationName);
+                ret = false;
+            }
+
+            try
+            {
+                DateTime FileTime = DateTime.ParseExact(timeHHmm, "HHmm", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                Log.Error("Invalid time format(HHmm) in file name: " + timeHHmm);
+                ret = false;
+            }
+
             finish:
             return ret;
         }
@@ -552,6 +571,8 @@ namespace Agent2._0
                 };
             foreach (string cmpnt in listCMPNT)
             {
+                if (cmpnt == "")
+                    continue;
                 if(db.Count("SELECT COUNT(id) FROM tbl_device WHERE sn='" + cmpnt + "'") > 0)
                 {
                     string currentRRUSN = db.GetString("SELECT rru_sn FROM tbl_device WHERE sn = '" + cmpnt + "'");

@@ -59,12 +59,12 @@ namespace Agent2._0
             {
                 ret = rdr.GetString(0);
             }
-            catch (Exception e)
+            catch 
             {
             }
             rdr.Close();
 
-            Log.Info(queryString + " result: " + ret);
+            Log.Debug(queryString + " result: " + ret);
             return ret;
         }
         public int GetInt16(string queryString)
@@ -77,12 +77,12 @@ namespace Agent2._0
             {
                 ret = rdr.GetInt16(0);
             }
-            catch (Exception e)
+            catch
             {
             }
             rdr.Close();
 
-            Log.Info(queryString + " result: " + ret);
+            Log.Debug(queryString + " result: " + ret);
             return ret;
         }
         public bool UpdateDevice(tblDevice dv)
@@ -113,7 +113,7 @@ namespace Agent2._0
                 MySqlCommand cmd = new MySqlCommand(queryStr, this.conn);
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Log.Info("Update Device: " + queryStr);
+                    Log.Debug("Update Device: " + queryStr);
                 }
                 else
                 {
@@ -146,7 +146,7 @@ namespace Agent2._0
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = dv.sn;
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
+                    Log.Debug("Insert Device: " + dv.id + "," + dv.mac + "," + dv.sn);
                     ret = true;
                 }
                 else
@@ -175,7 +175,7 @@ namespace Agent2._0
                 cmd.Parameters.Add("?rru_sn", MySqlDbType.VarChar).Value = "";
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Log.Info("Insert Device: " + dv.id + "," + dv.mac + "," + dv.mac2 + "," + dv.sn);
+                    Log.Debug("Insert Device: " + dv.id + "," + dv.mac + "," + dv.mac2 + "," + dv.sn);
                     return true;
                 }
                 else
@@ -233,7 +233,7 @@ namespace Agent2._0
                 cmd.Parameters.Add("?result", MySqlDbType.VarChar).Value = dvR.result;
                 if (cmd.ExecuteNonQuery() == 1)
                 {
-                    Log.Info("Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
+                    Log.Debug("Insert DeviceResult: " + dvR.id + "," + dvR.device_id + "," + dvR.campaign_id + "," + dvR.line + "," + dvR.date + "," + dvR.time + "," + dvR.station_name + "," + dvR.tester_name + "," + dvR.tester_id + "," + dvR.latest + "," + dvR.result);
                     return true;
                 }
                 else
@@ -297,7 +297,7 @@ namespace Agent2._0
             {
                 Log.Error("Exception" + e.Message);
             }
-
+            Log.Debug(queryString + " result: " + ret);
             return ret;
         }
 
@@ -307,13 +307,13 @@ namespace Agent2._0
             MySqlCommand cmd = new MySqlCommand(queryString, conn);
             if (cmd.ExecuteNonQuery() == 1)
             {
-                Log.Info("Execute SQL Command: " + queryString);
             }
             else
             {
-                Log.Error("Execute SQL Command failed: " + queryString);
                 ret = false;
             }
+            Log.Debug(queryString + " result: " + ret);
+
             return ret;
         }
 

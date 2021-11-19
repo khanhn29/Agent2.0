@@ -29,5 +29,11 @@ namespace Agent2._0
             mac = "";
             mac2 = "";
         }
+        public void Print()
+        {
+            string msg = string.Format("rru:{0} trx:{1} pa1:{2} pa2:{3} fil:{4} ant:{5} mac1:{6} mac2:{7}",
+                sn_rru, sn_trx, sn_pa1, sn_pa2, sn_fil, sn_ant, mac, mac2);
+            Log.Debug(msg);
+        }
     }
 }
