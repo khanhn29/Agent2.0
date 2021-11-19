@@ -297,7 +297,7 @@ namespace Agent2._0
             {
                 Log.Error("Exception" + e.Message);
             }
-
+            Log.Info(queryString + " result: " + ret);
             return ret;
         }
 
@@ -307,13 +307,13 @@ namespace Agent2._0
             MySqlCommand cmd = new MySqlCommand(queryString, conn);
             if (cmd.ExecuteNonQuery() == 1)
             {
-                Log.Info("Execute SQL Command: " + queryString);
             }
             else
             {
-                Log.Error("Execute SQL Command failed: " + queryString);
                 ret = false;
             }
+            Log.Info(queryString + " result: " + ret);
+
             return ret;
         }
 

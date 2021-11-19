@@ -254,6 +254,7 @@ namespace Agent2._0
                 if (exceltmp.StationName.Contains("ASSEM-RRU"))
                 {
                     ComponentsSerialNumber componentsInfo = GetComponentSNInExcel(db, exceltmp);
+                    componentsInfo.Print();
                     Log.Info("Fill RRU Serial number");
                     //FillRRUSN2Components(componentsInfo);
                     FillRRUSerialNumToComponents_2(componentsInfo);
@@ -552,6 +553,8 @@ namespace Agent2._0
                 };
             foreach (string cmpnt in listCMPNT)
             {
+                if (cmpnt == "")
+                    continue;
                 if(db.Count("SELECT COUNT(id) FROM tbl_device WHERE sn='" + cmpnt + "'") > 0)
                 {
                     string currentRRUSN = db.GetString("SELECT rru_sn FROM tbl_device WHERE sn = '" + cmpnt + "'");

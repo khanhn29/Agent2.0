@@ -69,7 +69,13 @@ namespace Agent2._0
             device_id = db.GetInt16(queryStr);
 
             campaign_id = campaign.Id;
-            line = Int16.Parse(excel.ReadCell(3, 2));
+            try
+            {
+                line = Int16.Parse(excel.ReadCell(3, 2));
+            }
+            catch {
+                line = 1;
+            }
             date = GetDate(excel.ReadCell(8, 2));
             time = excel.ReadCell(9, 2);
             station_name = stationnameNums[excel.StationName].ToString();
