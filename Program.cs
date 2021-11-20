@@ -61,6 +61,7 @@ namespace Agent2._0
         static void Main(string[] args)
         {
             Console.Title = "Agent 2.0";
+            DisableConsoleQuickEdit.Go();
             try
             {
                 bool successfulConnectionSFTP = false;
