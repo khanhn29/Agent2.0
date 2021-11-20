@@ -87,7 +87,7 @@ namespace Agent2._0
                 Log.Error(e.Message);
             }
             //svSftp.Disconnect();
-            Console.ReadLine();
+            //Console.ReadLine();
         }
 
         static bool ConnectSFTP()
