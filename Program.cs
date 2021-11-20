@@ -683,7 +683,7 @@ namespace Agent2._0
             ComponentsSerialNumber ret = new();
 
             ret.FileName = excel.FileName;
-            ret.sn_rru = excel.ReadCell(6, 2);
+            ret.sn_rru = excel.FileSerialNum;
             ret.sn_trx = excel.ReadCell(13, 4);
             ret.mac = db.GetString("SELECT mac FROM tbl_import_mac_sn WHERE sn = '" + ret.sn_trx + "'");
             ret.mac2 = db.GetString("SELECT mac2 FROM tbl_import_mac_sn WHERE sn = '" + ret.sn_trx + "'");

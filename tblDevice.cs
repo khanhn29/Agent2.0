@@ -23,7 +23,7 @@ namespace Agent2._0
             int id = 1;
             string mac = "";
             string mac2 = "";
-            string sn = excel.ReadCell(6, 2);
+            string sn = excel.FileSerialNum;
             int countDV = db.Count("SELECT COUNT(id) from tbl_device WHERE sn='" + sn + "'");
             string queryStr;
 
