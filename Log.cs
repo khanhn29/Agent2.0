@@ -22,7 +22,7 @@ namespace Agent2._0
                 [CallerMemberName] string member = "",
                 [CallerLineNumber] int line = 0)
         {
-            if(Program.DebugMode)
+            if(Program.DebugLogOn)
                 Console.WriteLine("[Debug]  {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
         }
         public static void Error(string text,
@@ -37,7 +37,8 @@ namespace Agent2._0
                         [CallerMemberName] string member = "",
                         [CallerLineNumber] int line = 0)
         {
-            Console.WriteLine("[Warning] {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
+            if (Program.DebugLogOn)
+                Console.WriteLine("[Warning] {0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
         }
     }
 }

@@ -19,7 +19,7 @@ namespace Agent2._0
 {
     class Program
     {
-        public static bool DebugMode = true;
+        public static bool DebugLogOn = false;
         static ServerDatabase db;
         static ServerSftp svSftp;
         static List<string> folders = new List<string>()
@@ -119,7 +119,7 @@ namespace Agent2._0
                 DateTime now = DateTime.Now;
                 if (DateTime.Compare(fromdate, now) <= 0 && DateTime.Compare(now, todate) <= 0)
                 {
-                    Log.Info("Found campaign: " + id + "--" + campaignName + "--" + fromdate + "--" + todate + "--" + logPath);
+                    Log.Debug("Found campaign: " + id + "--" + campaignName + "--" + fromdate + "--" + todate + "--" + logPath);
                     ActiveCampaignList.Add(new tblCampaign(id, fromdate, todate, logPath));
                 }
             }
@@ -128,6 +128,37 @@ namespace Agent2._0
             foreach (var campaign in ActiveCampaignList)
             {
                 LoadCampaign(campaign);
+            }
+
+            while(true)
+            {
+                System.Threading.Thread.Sleep(5000);
+                foreach (var campaign in ActiveCampaignList)
+                {
+                    LoadCampaign(campaign);
+                }
+            }
+
+        }
+
+        static void UpdateNewFileInCampaign(tblCampaign campaign)
+        {
+            string remoteFolder = campaign.LogPath;
+            foreach (string folder in folders)
+            {
+                string remoteStationFolder = remoteFolder + "/" + folder;
+                var files = svSftp.sftp.ListDirectory(remoteStationFolder);
+                foreach (SftpFile remoteFile in files)
+                {
+                    if (!remoteFile.Name.StartsWith(".") && !remoteFile.Name.StartsWith("~") && remoteFile.Name.Contains(".xlsx"))
+                    {
+                        Log.Info("Found new file: " + remoteFile.FullName);
+                        if(IsFileValid(remoteFile, campaign))
+                        {
+
+                        }
+                    }
+                }
             }
         }
 
@@ -172,9 +203,9 @@ namespace Agent2._0
 
             foreach (var folder in folders)
             {
-                Log.Info("Reading log from folder: " + folder);
+                Log.Debug("Reading log from folder: " + folder);
                 LoadOneStation(remotePath + "\\" + folder + "\\", localPath, campaign);
-                Log.Info("");
+                Log.Debug("");
             }
         }
 
@@ -186,17 +217,24 @@ namespace Agent2._0
             {
                 if (!remoteFile.Name.StartsWith(".") && !remoteFile.Name.StartsWith("~") && remoteFile.Name.Contains(".xlsx"))
                 {
-                    Log.Info("=============Start=============");
-                    Log.Info("Found file on sftp server: " + remoteFile.FullName);
-                    if(IsFileValid(remoteFile, campaign)){
+                    Log.Debug("=============Start=============");
+                    Log.Debug("Found file on sftp server: " + remoteFile.FullName);
+                    if(IsFileValid(remoteFile, campaign))
+                    {
                         string localFilePath = Path.Combine(localDirectory, remoteFile.Name);
                         DownloadFile(remoteFile.FullName, localFilePath);
-                        if (File.Exists(localFilePath)){
+                        if (File.Exists(localFilePath))
+                        {
                             bool ret = UpdateFileToSQLDatabase(localFilePath, campaign);
                             if (ret == true)
+                            {
                                 MoveFileToStorehouse(remoteDirectory, remoteFile);
+                                Log.Info("Update file to SQL success: " + remoteFile.FullName);
+                            }
                             else
+                            {
                                 Log.Error("Update database failed!");
+                            }
                         }
                         else{
                             Log.Error("Download file failed");
@@ -212,9 +250,10 @@ namespace Agent2._0
                         }
                     }
                     else{
-                        Log.Error("File not valid to insert to db");
+                        Log.Error("Update file to SQL failed: " + remoteFile.FullName);
+                        MoveFileToNotInserted(remoteDirectory, remoteFile);
                     }
-                    Log.Info("=============End=============");
+                    Log.Debug("=============End=============");
                 }
             }
 
@@ -318,7 +357,7 @@ namespace Agent2._0
         static bool IsFileValid(SftpFile file, tblCampaign campaign)
         {
             bool ret = true;
-            string FileName = file.Name;
+            string FileName = file.Name.Split(".")[0];
             DateTime fromDate = campaign.FromDate;
             DateTime toDate = campaign.ToDate;
             string[] parts = FileName.Split("_");
@@ -374,6 +413,12 @@ namespace Agent2._0
                 ret = false;
             }
 
+            if(result!="PASS" && result!="FAIL")
+            {
+                Log.Error("Invalid file name format result: " + result);
+                ret = false;
+            }
+
             finish:
             return ret;
         }
@@ -384,9 +429,9 @@ namespace Agent2._0
                 Stream stream;
 
                 stream = File.OpenWrite(localPath);
-                Log.Info("Found file on sftp server: " + remotePath);
-                Log.Info("Downloading file to: " + localPath);
-                svSftp.sftp.DownloadFile(remotePath, stream, x => Log.Info("File's size: " + x));
+                Log.Debug("Found file on sftp server: " + remotePath);
+                Log.Debug("Downloading file to: " + localPath);
+                svSftp.sftp.DownloadFile(remotePath, stream, x => Log.Debug("File's size: " + x));
                 stream.Close();
             }
             catch (Exception e)
@@ -412,6 +457,25 @@ namespace Agent2._0
             else
             {
                 file.MoveTo(remotePath + "\\storehouse\\" + DateTime.Now.ToString("MMddyyyy_HHmmss") + "_" + file.Name);
+            }
+        }
+        static void MoveFileToNotInserted(string remotePath, SftpFile file)
+        {
+            if (svSftp.Exists(remotePath + "\\NotInserted") == false)
+            {
+                try
+                {
+                    svSftp.sftp.CreateDirectory(remotePath + "\\NotInserted");
+                }
+                catch (SftpPathNotFoundException) { }
+            }
+            if (svSftp.sftp.Exists(remotePath + "\\NotInserted\\" + file.Name) == false)
+            {
+                file.MoveTo(remotePath + "\\NotInserted\\" + file.Name);
+            }
+            else
+            {
+                file.MoveTo(remotePath + "\\NotInserted\\" + DateTime.Now.ToString("MMddyyyy_HHmmss") + "_" + file.Name);
             }
         }
         static void RunCalibStationAPI()
