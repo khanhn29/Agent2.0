@@ -487,7 +487,7 @@ namespace Agent2._0
             var listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             listener.Bind(localEndPoint);
             listener.Listen(10);
-            Console.WriteLine($"[Info] Local socket bind to {localEndPoint}. Waiting for request ...");
+            Log.Info($"Local socket bind to {localEndPoint}. Waiting for request ...");
 
             var size = 1024;
             var receiveBuffer = new byte[size];
@@ -496,14 +496,14 @@ namespace Agent2._0
                 // tcp đòi hỏi một socket thứ hai làm nhiệm vụ gửi/nhận dữ liệu
                 // socket này được tạo ra bởi lệnh Accept
                 var socket = listener.Accept();
-                Console.WriteLine($"[Info] Accepted connection from {socket.RemoteEndPoint}");
+                Log.Info($"Accepted connection from {socket.RemoteEndPoint}");
 
                 // nhận dữ liệu vào buffer
                 var length = socket.Receive(receiveBuffer);
                 // không tiếp tục nhận dữ liệu nữa
                 socket.Shutdown(SocketShutdown.Receive);
                 var text = Encoding.ASCII.GetString(receiveBuffer, 0, length);
-                Console.WriteLine($"[Info] Received: {text}");
+                Log.Info($"Received: {text}");
                 try
                 {
                     JObject ob = JObject.Parse(text);
@@ -514,7 +514,7 @@ namespace Agent2._0
                     var sendBuffer = Encoding.ASCII.GetBytes(result);
                     // gửi kết quả lại cho client
                     socket.Send(sendBuffer);
-                    Console.WriteLine($"[Info] Sent: {result}");
+                    Log.Info($"Sent: {result}");
                 }
                 catch (Exception e)
                 {
@@ -527,7 +527,7 @@ namespace Agent2._0
                 socket.Shutdown(SocketShutdown.Send);
 
                 // đóng kết nối và giải phóng tài nguyên
-                Console.WriteLine($"[Info] Closing connection from {socket.RemoteEndPoint}\r\n");
+                Log.Debug($"Closing connection from {socket.RemoteEndPoint}\r\n");
                 socket.Close();
                 Array.Clear(receiveBuffer, 0, size);
             }
@@ -558,7 +558,7 @@ namespace Agent2._0
                         cmd = new MySqlCommand(queryStr, db.conn);
                         if (cmd.ExecuteNonQuery() == 1)
                         {
-                            Log.Info("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
+                            Log.Debug("Update Device: " + info.sn_trx + ": " + info.mac + "--" + info.mac2 + "--" + info.sn_rru);
                         }
                         else
                         {
@@ -588,7 +588,7 @@ namespace Agent2._0
                             cmd = new MySqlCommand(queryStr, db.conn);
                             if (cmd.ExecuteNonQuery() == 1)
                             {
-                                Log.Info("Update Device: " + cmpnt + ":" + info.sn_rru);
+                                Log.Debug("Update Device: " + cmpnt + ":" + info.sn_rru);
                             }
                             else
                             {
@@ -603,7 +603,7 @@ namespace Agent2._0
                     cmd = new MySqlCommand(queryStr, db.conn);
                     if (cmd.ExecuteNonQuery() == 1)
                     {
-                        Log.Info("Update Device: " + info.sn_rru);
+                        Log.Debug("Update Device: " + info.sn_rru);
                     }
                     else
                     {
@@ -700,15 +700,15 @@ namespace Agent2._0
             myCompnt.sn_rru = rru_sn;
             try
             {
-                Log.Info("Openning Connection ...");
+                Log.Debug("Openning Connection ...");
                 string queryString = "select * from tbl_device where rru_sn = '" + rru_sn + "'";
-                Log.Info("queryString: " + queryString);
+                Log.Debug("queryString: " + queryString);
                 using var command = new MySqlCommand(queryString, db.conn);
                 MySqlDataReader rdr = command.ExecuteReader();
 
                 while (rdr.Read())
                 {
-                    Log.Info("" + rdr["id"] + "--" + rdr["mac"] + "--" + rdr["sn"] + "--" + rdr["rru_sn"]);
+                    Log.Debug("" + rdr["id"] + "--" + rdr["mac"] + "--" + rdr["sn"] + "--" + rdr["rru_sn"]);
                     var sn_component = rdr["sn"].ToString();
                     if (sn_component.IndexOf("MTR") >= 0)
                     {
