@@ -60,7 +60,11 @@ namespace Agent2._0
         };
         static void Main(string[] args)
         {
+#pragma warning disable CA1416 // Validate platform compatibility
+            Console.SetWindowSize(180, 40);
+#pragma warning restore CA1416 // Validate platform compatibility
             Console.Title = "Agent 2.0";
+
             DisableConsoleQuickEdit.Go();
             try
             {
