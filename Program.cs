@@ -307,7 +307,8 @@ namespace Agent2._0
             }
 
             tblDeviceResult newDeviceResult = new(db, exceltmp, campaign);
-            db.ExecuteNonQuery("UPDATE tbl_device_result SET latest='0' where device_id='"+newDeviceResult.device_id+"'");
+            db.ExecuteNonQuery("UPDATE tbl_device_result SET latest='0' where device_id='"+
+                newDeviceResult.device_id + "' and station_name='" + newDeviceResult.station_name+ "'");
             ret = db.InsertDeviceResult(newDeviceResult);
             if (ret == true)
             {
