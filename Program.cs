@@ -74,11 +74,11 @@ namespace Agent2._0
                     System.Threading.Thread.Sleep(1000);
                     successfulConnectionSFTP = ConnectSFTP();
                 }
-                bool successfulConnectionMySQP = false;
-                while (!successfulConnectionMySQP)
+                bool successfulConnectionMySQL = false;
+                while (!successfulConnectionMySQL)
                 {
                     System.Threading.Thread.Sleep(1000);
-                    successfulConnectionMySQP = ConnectMySQL();
+                    successfulConnectionMySQL = ConnectMySQL();
                 }
                 KillSpecificExcelFileProcess();
                 Thread StationAPIThrd = new(RunCalibStationAPI);
