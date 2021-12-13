@@ -6,8 +6,8 @@ namespace Agent2._0
 {
     class tblDetailResult
     {
-        public int id { get; set; }
-        public int device_result_id { get; set; }
+        public UInt64 id { get; set; }
+        public UInt64 device_result_id { get; set; }
         public int sequence { get; set; }
         public string item_name { get; set; }
         public string min_value { get; set; }
@@ -28,12 +28,12 @@ namespace Agent2._0
             test_time = "";
             result = "";
         }
-        public tblDetailResult(ServerDatabase db, Excel excel, int excelRow, int newDeviceResultId)
+        public tblDetailResult(ServerDatabase db, Excel excel, int excelRow, UInt64 newDeviceResultId)
         {
             MySqlDataReader rdr = db.Reader("SELECT MAX(id) FROM tbl_detail_result");
             rdr.Read();
             try{
-                id = rdr.GetInt16(0) + 1;
+                id = (ulong)(rdr.GetUInt64(0) + 1);
             }
             catch(SqlNullValueException){
                 id = 1;

@@ -337,7 +337,7 @@ namespace Agent2._0
             exceltmp.Close();
             return ret;
         }
-        static bool InsertDetailResults(ServerDatabase db, Excel excel, int newDeviceResultId)
+        static bool InsertDetailResults(ServerDatabase db, Excel excel, UInt64 newDeviceResultId)
         {
             bool ret = true;
             long fullRow = excel.ws.UsedRange.Rows.Count;

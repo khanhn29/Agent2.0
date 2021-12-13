@@ -6,11 +6,11 @@ namespace Agent2._0
 {
     class tblDevice
     {
-        public int id { get; set; }
+        public UInt64 id { get; set; }
         public string mac { get; set; }
         public string mac2 { get; set; }
         public string sn { get; set; }
-        public tblDevice(int id, string mac, string mac2, string sn)
+        public tblDevice(UInt64 id, string mac, string mac2, string sn)
         {
             this.id = id;
             this.mac = mac;
@@ -20,7 +20,7 @@ namespace Agent2._0
 
         public tblDevice(ServerDatabase db, Excel excel)
         {
-            int id = 1;
+            UInt64 id = 1;
             string mac = "";
             string mac2 = "";
             string sn = excel.FileSerialNum;
@@ -29,12 +29,12 @@ namespace Agent2._0
 
             if (countDV == 0)
             {
-                id = db.GetInt16("SELECT MAX(id) FROM tbl_device") + 1;
+                id = db.GetUInt64("SELECT MAX(id) FROM tbl_device") + 1;
             }
             else 
             {
                 queryStr = string.Format("SELECT id FROM tbl_device WHERE sn = '{0}' LIMIT 1", sn);
-                id = db.GetInt16(queryStr);
+                id = db.GetUInt64(queryStr);
             }
 
             queryStr = string.Format("SELECT mac FROM tbl_import_mac_sn WHERE sn = '{0}'", sn);

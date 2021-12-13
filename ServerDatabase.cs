@@ -85,6 +85,24 @@ namespace Agent2._0
             Log.Debug(queryString + " result: " + ret);
             return ret;
         }
+        public UInt64 GetUInt64(string queryString)
+        {
+            UInt64 ret = 0;
+
+            MySqlDataReader rdr = this.Reader(queryString);
+            rdr.Read();
+            try
+            {
+                ret = rdr.GetUInt64(0);
+            }
+            catch
+            {
+            }
+            rdr.Close();
+
+            Log.Debug(queryString + " result: " + ret);
+            return ret;
+        }
         public bool UpdateDevice(tblDevice dv)
         {
             bool ret = true;

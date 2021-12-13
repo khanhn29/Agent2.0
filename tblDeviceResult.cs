@@ -8,8 +8,8 @@ namespace Agent2._0
 {
     class tblDeviceResult
     {
-        public int id { get; set; }
-        public int device_id { get; set; }
+        public UInt64 id { get; set; }
+        public UInt64 device_id { get; set; }
         public int campaign_id { get; set; }
         public int line { get; set; }
         public string date { get; set; }
@@ -57,7 +57,7 @@ namespace Agent2._0
             MySqlDataReader rdr = db.Reader("SELECT MAX(id) FROM tbl_device_result");
             rdr.Read();
             try{
-                id = rdr.GetInt16(0) + 1;
+                id = rdr.GetUInt64(0) + 1;
             }
             catch (SqlNullValueException){
                 id = 1;
@@ -66,7 +66,7 @@ namespace Agent2._0
 
             string sn = excel.FileSerialNum;
             string queryStr = string.Format("SELECT id FROM tbl_device WHERE sn='{0}' LIMIT 1", sn);
-            device_id = db.GetInt16(queryStr);
+            device_id = db.GetUInt64(queryStr);
 
             campaign_id = campaign.Id;
             try
